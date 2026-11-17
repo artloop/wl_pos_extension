@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>WL Position Checker</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Позиции Whitelist</h1>
+        <p id="version"></p>
+      </header>
+      <p id="status" class="status">Загрузка…</p>
+      <p id="backend" class="muted"></p>
+      <p id="update" class="update" hidden></p>
+      <div class="actions">
+        <button id="grant" type="button">Разрешить доступ</button>
+        <button id="link" type="button">Следить в Telegram</button>
+      </div>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

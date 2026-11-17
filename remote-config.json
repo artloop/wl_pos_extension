@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "backend": {
+    "baseUrl": "http://localhost:8080",
+    "pairPath": "/pair"
+  },
+  "whitelist": {
+    "positionUrl": "https://api.moex.whitelist.capital/api/v1/user/position"
+  },
+  "update": {
+    "latestVersion": "0.1.0",
+    "notes": "",
+    "downloadUrl": "https://github.com/artloop/wl_pos_extension/releases/latest"
+  }
+}

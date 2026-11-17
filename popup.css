@@ -1,0 +1,56 @@
+body {
+  margin: 0;
+  width: 320px;
+  color: #e8edf5;
+  background: #161b22;
+  font: 13px/1.4 "Segoe UI", sans-serif;
+}
+
+main {
+  padding: 16px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 16px;
+}
+
+#version,
+.muted {
+  margin: 4px 0 0;
+  color: #9aa6b8;
+}
+
+.status {
+  margin: 14px 0;
+}
+
+.update {
+  margin: 0 0 12px;
+  color: #f0c674;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #fff;
+  background: #3b82f6;
+  cursor: pointer;
+}
+
+button.secondary {
+  color: #d7deea;
+  background: #2a3340;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "WL Position Checker",
+  "version": "0.1.0",
+  "description": "Следит за позициями кабинета Whitelist и переносит оповещения в Telegram.",
+  "permissions": ["cookies", "notifications", "alarms", "storage", "declarativeNetRequestWithHostAccess"],
+  "host_permissions": ["https://raw.githubusercontent.com/*"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "128": "icon128.png"
+  }
+}
