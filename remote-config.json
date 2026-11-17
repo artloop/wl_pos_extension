@@ -10,8 +10,8 @@
     "positionUrl": "https://api.moex.whitelist.capital/api/v1/user/position"
   },
   "update": {
-    "latestVersion": "1.0.0",
-    "notes": "Выбор оповещений синхронизируется со стендом.",
+    "latestVersion": "1.1.0",
+    "notes": "Можно не отправлять данные на сервер. Для Telegram это включается само.",
     "downloadUrl": "https://github.com/artloop/wl_pos_extension/releases/latest"
   }
 }

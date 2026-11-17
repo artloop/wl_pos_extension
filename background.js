@@ -20,6 +20,7 @@ const EMPTY_STATE = {
   prefsDirty: false,
   prefsConflict: false,
   prefsKnown: false,
+  shareWithServer: false,
 };
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -61,6 +62,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((error) => sendResponse({ error: error instanceof Error ? error.message : "Не удалось синхронизировать настройки" }));
     return true;
   }
+  if (message?.type === "setShare") {
+    setShare(Boolean(message.enabled))
+      .then(sendResponse)
+      .catch((error) => sendResponse({ error: error instanceof Error ? error.message : "Не удалось изменить сохранение на сервере" }));
+    return true;
+  }
   return false;
 });
 
@@ -91,7 +98,97 @@ async function getState() {
   return chrome.storage.local.get(EMPTY_STATE);
 }
 
+async function ensureShare() {
+  const stored = await chrome.storage.local.get(["shareWithServer", "linked", "pendingCode", "jwtHash"]);
+  if (stored.linked || stored.pendingCode) {
+    if (stored.shareWithServer !== true) await chrome.storage.local.set({ shareWithServer: true });
+    return true;
+  }
+  if (typeof stored.shareWithServer === "boolean") return stored.shareWithServer;
+  if (stored.jwtHash) {
+    await chrome.storage.local.set({ shareWithServer: true });
+    return true;
+  }
+  return false;
+}
+
+async function currentShare() {
+  const stored = await chrome.storage.local.get(["shareWithServer", "linked", "pendingCode"]);
+  if (stored.linked || stored.pendingCode) return true;
+  return stored.shareWithServer === true;
+}
+
+async function setShare(enabled) {
+  const state = await getState();
+  if (!enabled && (state.linked || state.pendingCode)) {
+    await chrome.storage.local.set({ shareWithServer: true });
+    return { ok: true, locked: true, shareWithServer: true };
+  }
+  if (enabled) {
+    await chrome.storage.local.set({ shareWithServer: true });
+    const config = await loadRemoteConfig();
+    const granted = await chrome.permissions.contains({ origins: accessOrigins(config) });
+    if (!granted) {
+      return { ok: false, shareWithServer: true, error: "Нужен доступ к кабинету и стенду. Откройте расширение." };
+    }
+    const jwt = await readJwt(config.whitelist.positionUrl);
+    if (!jwt) return { ok: false, shareWithServer: true, error: "Cookie jwt не найдена. Войдите на сайт." };
+    await syncBackend(config, jwt);
+    return { ok: true, shareWithServer: true };
+  }
+  const forgotten = await forgetServer();
+  if (!forgotten) return { ok: true, locked: true, shareWithServer: true };
+  return { ok: true, shareWithServer: false };
+}
+
+async function forgetServer() {
+  const prior = await chrome.storage.local.get(["jwtHash", "linked", "pendingCode"]);
+  if (prior.linked || prior.pendingCode) {
+    await chrome.storage.local.set({ shareWithServer: true });
+    return false;
+  }
+  const config = await loadRemoteConfig();
+  const granted = await chrome.permissions.contains({ origins: accessOrigins(config) });
+  const jwt = granted ? await readJwt(config.whitelist.positionUrl) : null;
+  let toldServer = false;
+  if (jwt) {
+    const payload = await syncBackend(config, jwt, { consent: false });
+    if (payload?.linked) {
+      await chrome.storage.local.set({ shareWithServer: true });
+      return false;
+    }
+    toldServer = true;
+  } else if (granted) {
+    const stored = await chrome.storage.session.get(SESSION_KEYS);
+    const alive = stored.sessionId && stored.sessionKey && Number(stored.sessionExpires) > Date.now() + 5000;
+    if (alive) {
+      try {
+        const payload = await withChannel(() => postChannel(config, stored, { consent: false }));
+        if (payload?.linked) {
+          await chrome.storage.local.set({ shareWithServer: true });
+          return false;
+        }
+        toldServer = true;
+      } catch (error) {
+        if (!error.relogin) throw error;
+      }
+    }
+  }
+  if (prior.jwtHash && !toldServer) {
+    throw new Error("Не удалось стереть данные на стенде. Войдите на сайт и снимите галочку снова.");
+  }
+  await clearSession();
+  await chrome.storage.local.set({
+    shareWithServer: false,
+    prefsRevision: null,
+    prefsConflict: false,
+    prefsDirty: true,
+  });
+  return true;
+}
+
 async function collectStatus() {
+  const share = await ensureShare();
   const state = await getState();
   let config = null;
   let configError = null;
@@ -117,7 +214,9 @@ async function collectStatus() {
     configError,
     permissionGranted,
     backend: config?.backend.baseUrl || null,
-    prefsConflict: Boolean(state.prefsConflict),
+    prefsConflict: Boolean(state.prefsConflict) && share,
+    shareWithServer: share,
+    shareLocked: Boolean(state.linked || state.pendingCode),
     update,
     version,
   };
@@ -128,6 +227,7 @@ async function pollOnce() {
   try {
     const config = await loadRemoteConfig();
     await maybeNotifyUpdate(config);
+    const share = await ensureShare();
     const granted = await chrome.permissions.contains({ origins: accessOrigins(config) });
     if (!granted) {
       await chrome.storage.local.set({ lastError: "Нужен доступ к кабинету и стенду. Откройте расширение." });
@@ -138,10 +238,12 @@ async function pollOnce() {
       await chrome.storage.local.set({ lastError: "Cookie jwt не найдена. Войдите на сайт." });
       return { ok: false };
     }
-    try {
-      await syncBackend(config, jwt);
-    } catch (error) {
-      syncError = error instanceof Error ? error.message : "Ошибка связи со стендом";
+    if (share) {
+      try {
+        await syncBackend(config, jwt);
+      } catch (error) {
+        syncError = error instanceof Error ? error.message : "Ошибка связи со стендом";
+      }
     }
     const state = await getState();
     const positions = await fetchPositions(config.whitelist.positionUrl, jwt);
@@ -171,7 +273,7 @@ async function pollOnce() {
     await chrome.storage.local.set({
       lastSnapshot: positions,
       snapshotAt: Date.now(),
-      ...(syncError ? { lastError: syncError } : {}),
+      ...(syncError ? { lastError: syncError } : share ? {} : { lastError: null }),
     });
     return { ok: !syncError, error: syncError };
   } catch (error) {
@@ -198,6 +300,7 @@ async function maybeNotifyUpdate(config) {
 }
 
 async function linkTelegram(jwt) {
+  await chrome.storage.local.set({ shareWithServer: true });
   const config = await loadRemoteConfig();
   const payload = await syncBackend(config, jwt, { pair: { relink: true } });
   if (payload?.pair?.deepLink) {
@@ -208,6 +311,7 @@ async function linkTelegram(jwt) {
 }
 
 async function pushPrefs() {
+  if (!(await ensureShare())) return { ok: true };
   const state = await getState();
   if (state.prefsConflict) return { ok: true };
   const config = await loadRemoteConfig();
@@ -220,6 +324,7 @@ async function pushPrefs() {
 }
 
 async function resolvePrefs(choice) {
+  if (!(await ensureShare())) throw new Error("Сохранение на сервере выключено");
   const config = await loadRemoteConfig();
   const jwt = await readJwt(config.whitelist.positionUrl);
   if (!jwt) throw new Error("Cookie jwt не найдена. Войдите на сайт.");
@@ -232,6 +337,8 @@ async function syncBackend(config, jwt, extra = {}) {
 }
 
 async function syncLocked(config, jwt, extra) {
+  const explicit = extra.consent === false || extra.pair || extra.intent;
+  if (!explicit && !(await currentShare())) return { skipped: true };
   let session = await ensureSession(config, jwt);
   await adoptIdentity(session.sessionSiteUserId);
   const resolving = extra.intent === "resolve-push" || extra.intent === "resolve-pull";
@@ -267,6 +374,7 @@ async function exchange(config, session, jwt, extra) {
 }
 
 async function buildMessage(jwt, extra) {
+  if (extra.consent === false) return { consent: false };
   const state = await getState();
   const message = {};
   if (extra.intent) message.intent = extra.intent;

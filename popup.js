@@ -11,7 +11,13 @@ const MARKETS = [
 const BUY = new Set(["buy", "long", "b", "покупка"]);
 const SELL = new Set(["sell", "short", "s", "продажа"]);
 
+const PRIVACY_OFF = "Токен кабинета и настройки остаются в этом браузере и на сервер не отправляются.";
+const PRIVACY_ON =
+  "На сервере лежат зашифрованный токен кабинета и настройки оповещений. Торговую статистику и историю сделок мы не храним. Пока включён Telegram, нужен только последний снимок позиций, чтобы заметить изменение. Сообщение приходит только вам.";
+
 const statusNode = document.querySelector("#status");
+const privacyNode = document.querySelector("#privacy");
+const privacyInfoNode = document.querySelector("#privacy-info");
 const versionNode = document.querySelector("#version");
 const backendNode = document.querySelector("#backend");
 const linkStateNode = document.querySelector("#link-state");
@@ -38,7 +44,17 @@ function setStatus(text) {
   statusNode.textContent = text || "";
 }
 
+function privacyText(state) {
+  if (state.shareWithServer || state.linked || state.pending) return PRIVACY_ON;
+  return PRIVACY_OFF;
+}
+
 function paintChrome(state) {
+  viewState = state;
+  const privacy = privacyText(state);
+  privacyNode.textContent = privacy;
+  privacyInfoNode.textContent = privacy;
+  syncShareControl();
   versionNode.textContent = `Версия ${state.version}`;
   backendNode.textContent = state.backend ? `Стенд: ${state.backend}` : "Адрес стенда ещё не получен";
   linkStateNode.textContent = telegramLine(state);
@@ -59,7 +75,8 @@ function paintChrome(state) {
   }
   grantButton.hidden = !state.backend || state.permissionGranted;
   grantButton.disabled = false;
-  conflictPanel.hidden = !state.prefsConflict || !state.permissionGranted || Boolean(state.configError);
+  conflictPanel.hidden =
+    !state.prefsConflict || !state.shareWithServer || !state.permissionGranted || Boolean(state.configError);
   if (state.configError) {
     setStatus(state.configError);
     linkButton.disabled = true;
@@ -113,6 +130,36 @@ function togglePanel(button, panel) {
 
 let notifyPrefs = {};
 let prefsWrite = Promise.resolve();
+let viewState = { shareWithServer: false, linked: false, pending: false };
+let shareInput = null;
+let shareNote = null;
+
+function syncShareControl() {
+  if (!shareInput || !shareNote) return;
+  const locked = Boolean(viewState.linked || viewState.pending || viewState.shareLocked);
+  shareInput.checked = Boolean(viewState.shareWithServer || locked);
+  shareInput.disabled = locked;
+  shareNote.textContent = privacyText(viewState);
+}
+
+async function saveShare(enabled) {
+  if (!shareInput) return;
+  const locked = Boolean(viewState.linked || viewState.pending || viewState.shareLocked);
+  if (!enabled && locked) {
+    shareInput.checked = true;
+    return;
+  }
+  shareInput.disabled = true;
+  let result = null;
+  try {
+    result = await send({ type: "setShare", enabled });
+  } catch (error) {
+    result = { error: error instanceof Error ? error.message : "Не удалось изменить сохранение на сервере" };
+  }
+  if (result?.locked || (!enabled && result?.error)) shareInput.checked = true;
+  await render();
+  if (result?.error) setStatus(result.error);
+}
 
 async function buildSettings() {
   const stored = await chrome.storage.local.get("notifyPrefs");
@@ -128,6 +175,21 @@ async function buildSettings() {
     group.options.push(option);
   }
   settingsPanel.replaceChildren();
+  const shareTitle = document.createElement("p");
+  shareTitle.className = "panel-title";
+  shareTitle.textContent = "Сервер";
+  const shareLabel = document.createElement("label");
+  shareLabel.className = "share-toggle";
+  shareInput = document.createElement("input");
+  shareInput.type = "checkbox";
+  shareInput.addEventListener("change", () => saveShare(shareInput.checked));
+  const shareText = document.createElement("span");
+  shareText.textContent = "Сохранять настройки на сервере";
+  shareLabel.append(shareInput, shareText);
+  shareNote = document.createElement("p");
+  shareNote.className = "privacy";
+  settingsPanel.append(shareTitle, shareLabel, shareNote);
+  syncShareControl();
   for (const group of groups) {
     const title = document.createElement("p");
     title.className = "panel-title";
@@ -479,7 +541,11 @@ prefsPull.addEventListener("click", () => resolveConflict("pull"));
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.notifyPrefs) buildSettings();
-  if (changes.prefsConflict) conflictPanel.hidden = !changes.prefsConflict.newValue;
+  if (changes.prefsConflict || changes.shareWithServer) {
+    const conflict = changes.prefsConflict ? changes.prefsConflict.newValue : viewState.prefsConflict;
+    const share = changes.shareWithServer ? changes.shareWithServer.newValue : viewState.shareWithServer;
+    conflictPanel.hidden = !conflict || !share;
+  }
 });
 
 await buildSettings();
