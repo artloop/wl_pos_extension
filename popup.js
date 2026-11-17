@@ -14,15 +14,28 @@ const SELL = new Set(["sell", "short", "s", "продажа"]);
 const PRIVACY_OFF = "Токен кабинета и настройки остаются в этом браузере и на сервер не отправляются.";
 const PRIVACY_ON =
   "На сервере лежат зашифрованный токен кабинета и настройки оповещений. Торговую статистику и историю сделок мы не храним. Пока включён Telegram, нужен только последний снимок позиций, чтобы заметить изменение. Сообщение приходит только вам.";
+const BANNERS_OFF = "Баннеры браузера выключены. Изменения копятся числом на значке расширения.";
 
-const statusNode = document.querySelector("#status");
-const privacyNode = document.querySelector("#privacy");
+const ICONS = {
+  up: "M4 12l1.41 1.41L11 7.83V20h2V7.83l5.59 5.58L20 12l-8-8-8 8z",
+  down: "M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.59-5.58L4 12l8 8 8-8z",
+  list: "M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z",
+  chevron: "M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z",
+};
+
+const privacyButton = document.querySelector("#privacy-status");
+const privacyTip = document.querySelector("#privacy-tip");
 const privacyInfoNode = document.querySelector("#privacy-info");
+const alertButton = document.querySelector("#alert");
+const alertTip = document.querySelector("#alert-tip");
+const bannersButton = document.querySelector("#banners");
+const bannersTip = document.querySelector("#banners-tip");
 const versionNode = document.querySelector("#version");
 const backendNode = document.querySelector("#backend");
 const linkStateNode = document.querySelector("#link-state");
 const bannerStateNode = document.querySelector("#banner-state");
-const updateNode = document.querySelector("#update");
+const updateButton = document.querySelector("#update");
+const updateTip = document.querySelector("#update-tip");
 const positionsNode = document.querySelector("#positions");
 const settingsPanel = document.querySelector("#settings-panel");
 const conflictPanel = document.querySelector("#prefs-conflict");
@@ -35,13 +48,35 @@ const grantButton = document.querySelector("#grant");
 const linkButton = document.querySelector("#link");
 const linkTip = document.querySelector("#link-tip");
 
+let updateUrl = "";
+
 async function send(message) {
   return chrome.runtime.sendMessage(message);
 }
 
-function setStatus(text) {
-  statusNode.hidden = !text;
-  statusNode.textContent = text || "";
+function setTip(button, tipNode, text) {
+  tipNode.textContent = text;
+  button.setAttribute("aria-label", text);
+}
+
+function setAlert(text) {
+  const message = text || "";
+  alertButton.hidden = !message;
+  alertTip.textContent = message;
+  if (message) alertButton.setAttribute("aria-label", message);
+}
+
+function icon(name) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("width", "14");
+  svg.setAttribute("height", "14");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("d", ICONS[name]);
+  svg.append(path);
+  return svg;
 }
 
 function privacyText(state) {
@@ -52,51 +87,48 @@ function privacyText(state) {
 function paintChrome(state) {
   viewState = state;
   const privacy = privacyText(state);
-  privacyNode.textContent = privacy;
   privacyInfoNode.textContent = privacy;
+  setTip(privacyButton, privacyTip, privacy);
+  privacyButton.classList.toggle("on", Boolean(state.shareWithServer || state.linked || state.pending));
+  privacyButton.classList.remove("busy");
   syncShareControl();
   versionNode.textContent = `Версия ${state.version}`;
-  backendNode.textContent = state.backend ? `Стенд: ${state.backend}` : "Адрес стенда ещё не получен";
+  backendNode.hidden = Boolean(state.backend);
+  backendNode.textContent = state.backend ? "" : "Конфигурация стенда ещё не получена";
   linkStateNode.textContent = telegramLine(state);
   bannerStateNode.textContent = state.notificationsDenied
     ? "Баннеры браузера выключены, изменения копятся на значке."
     : "Баннеры браузера включены.";
-  const tip = linkTipText(state);
-  linkTip.textContent = tip;
-  linkButton.setAttribute("aria-label", tip);
+  bannersButton.hidden = !state.notificationsDenied;
+  if (state.notificationsDenied) setTip(bannersButton, bannersTip, BANNERS_OFF);
+  linkButton.classList.remove("busy");
+  setTip(linkButton, linkTip, linkTipText(state));
   linkButton.classList.toggle("on", Boolean(state.linked));
   if (state.update) {
-    updateNode.hidden = false;
+    updateButton.hidden = false;
     const notes = state.update.notes ? ` ${state.update.notes}` : "";
-    const link = state.update.downloadUrl ? ` ${state.update.downloadUrl}` : "";
-    updateNode.textContent = `Доступна версия ${state.update.latestVersion}.${notes}${link}`;
+    setTip(updateButton, updateTip, `Доступна версия ${state.update.latestVersion}.${notes}`);
+    updateUrl = state.update.downloadUrl || "";
   } else {
-    updateNode.hidden = true;
+    updateButton.hidden = true;
+    updateUrl = "";
   }
   grantButton.hidden = !state.backend || state.permissionGranted;
   grantButton.disabled = false;
   conflictPanel.hidden =
     !state.prefsConflict || !state.shareWithServer || !state.permissionGranted || Boolean(state.configError);
   if (state.configError) {
-    setStatus(state.configError);
+    setAlert(state.configError);
     linkButton.disabled = true;
     return false;
   }
   if (!state.permissionGranted) {
-    setStatus("Разрешите доступ к кабинету и стенду.");
+    setAlert("");
     linkButton.disabled = true;
     return false;
   }
   linkButton.disabled = false;
-  if (state.pending) {
-    setStatus("Подтвердите привязку в Telegram.");
-  } else if (state.lastError) {
-    setStatus(state.lastError);
-  } else if (state.notificationsDenied) {
-    setStatus("Уведомления браузера выключены. Новые изменения отмечаются числом на значке.");
-  } else {
-    setStatus("");
-  }
+  setAlert(state.lastError || "");
   return true;
 }
 
@@ -109,6 +141,7 @@ function telegramLine(state) {
 }
 
 function linkTipText(state) {
+  if (state.pending) return "Подтвердите привязку в Telegram.";
   if (state.linked) {
     const who = state.siteUserId ? `, кабинет ${state.siteUserId}` : "";
     return `Telegram подключён${who}. Нажмите, чтобы привязать заново.`;
@@ -158,7 +191,7 @@ async function saveShare(enabled) {
   }
   if (result?.locked || (!enabled && result?.error)) shareInput.checked = true;
   await render();
-  if (result?.error) setStatus(result.error);
+  if (result?.error) setAlert(result.error);
 }
 
 async function buildSettings() {
@@ -225,18 +258,9 @@ function hidePositions() {
   positionsNode.replaceChildren();
 }
 
-function renderPositions(snapshot, snapshotAt, { loading = false } = {}) {
+function renderPositions(snapshot, snapshotAt) {
   if (!snapshot) {
-    if (!loading) {
-      hidePositions();
-      return;
-    }
-    positionsNode.replaceChildren();
-    positionsNode.hidden = false;
-    const note = document.createElement("p");
-    note.className = "positions-note";
-    note.textContent = "Обновляю позиции…";
-    positionsNode.append(note);
+    hidePositions();
     return;
   }
   positionsNode.replaceChildren();
@@ -256,11 +280,15 @@ function renderPositions(snapshot, snapshotAt, { loading = false } = {}) {
   for (const [title, items] of groups) {
     const section = document.createElement("section");
     const heading = document.createElement("h2");
-    heading.textContent = title;
-    const cards = document.createElement("div");
-    cards.className = "cards";
-    for (const item of items) cards.append(renderCard(item));
-    section.append(heading, cards);
+    heading.append(document.createTextNode(title));
+    const count = document.createElement("span");
+    count.className = "count";
+    count.textContent = String(items.length);
+    heading.append(count);
+    const rows = document.createElement("div");
+    rows.className = "rows";
+    for (const item of items) rows.append(renderRow(item));
+    section.append(heading, rows);
     positionsNode.append(section);
   }
 }
@@ -275,59 +303,65 @@ function marketGroups(snapshot) {
   return groups;
 }
 
-function renderCard(item) {
-  const card = document.createElement("article");
+function renderRow(item) {
   const orders = sortOrders(ordersOf(item));
   const lots = lotsOf(item.position);
   const pnl = money(item.openedFinancialResult);
-
-  const head = document.createElement("div");
-  head.className = "head";
-  const name = document.createElement("strong");
-  name.textContent = item.tool;
-  head.append(name);
-  if (lots != null) {
-    const badge = document.createElement("span");
-    badge.className = "badge";
-    badge.textContent = `${isShort(item) ? "↓" : "↑"} ${formatLots(lots)} L`;
-    head.append(badge);
-  }
-  card.append(head);
-
-  if (pnl) {
-    const pnlNode = document.createElement("p");
-    pnlNode.className = pnl.negative ? "pnl down" : "pnl up";
-    pnlNode.textContent = pnl.text;
-    card.append(pnlNode);
-  }
-
-  const shownCount = orders.length > 0 ? orders.length : finite(item.orderCount);
   const details = renderDetails(item, orders);
+  const article = document.createElement("article");
+  const short = lots != null && isShort(item);
+  article.className = lots == null ? "row flat" : short ? "row short" : "row long";
+
+  const summary = document.createElement(details ? "button" : "div");
+  summary.className = "summary";
   if (details) {
-    const foot = document.createElement("div");
-    foot.className = "foot";
-    if (shownCount != null && shownCount > 0) {
-      const ordersLabel = document.createElement("span");
-      ordersLabel.textContent = `Заявки · ${shownCount}`;
-      foot.append(ordersLabel);
-    }
-    const chevron = document.createElement("button");
-    chevron.type = "button";
-    chevron.className = "chevron";
-    chevron.textContent = "▾";
-    chevron.setAttribute("aria-expanded", "false");
-    chevron.setAttribute("aria-label", `Подробности ${item.tool}`);
+    summary.type = "button";
+    summary.setAttribute("aria-expanded", "false");
+  }
+
+  const edge = document.createElement("span");
+  edge.className = "edge";
+  const name = document.createElement("strong");
+  name.className = "tool";
+  name.textContent = item.tool;
+  const qty = document.createElement("span");
+  qty.className = "qty";
+  if (lots != null) {
+    qty.classList.add(short ? "down" : "up");
+    qty.append(icon(short ? "down" : "up"));
+    const lotsText = document.createElement("span");
+    lotsText.textContent = formatLots(lots);
+    qty.append(lotsText);
+    qty.setAttribute("aria-label", `${short ? "Короткая" : "Длинная"} ${formatLots(lots)}`);
+  } else {
+    const shownCount = orders.length > 0 ? orders.length : finite(item.orderCount);
+    qty.append(icon("list"));
+    const countText = document.createElement("span");
+    countText.textContent = shownCount == null ? "" : String(shownCount);
+    qty.append(countText);
+    if (shownCount != null) qty.setAttribute("aria-label", `Заявки ${shownCount}`);
+  }
+  const pnlNode = document.createElement("span");
+  pnlNode.className = "pnl";
+  if (pnl) {
+    pnlNode.classList.add(pnl.negative ? "down" : "up");
+    pnlNode.textContent = pnl.text;
+  }
+  const chevron = details ? icon("chevron") : document.createElement("span");
+  if (details) chevron.classList.add("chevron");
+  summary.append(edge, name, qty, pnlNode, chevron);
+  article.append(summary);
+  if (details) {
     details.hidden = true;
-    chevron.addEventListener("click", () => {
+    summary.addEventListener("click", () => {
       const open = details.hidden;
       details.hidden = !open;
-      chevron.setAttribute("aria-expanded", String(open));
-      chevron.textContent = open ? "▴" : "▾";
+      summary.setAttribute("aria-expanded", String(open));
+      chevron.classList.toggle("open", open);
     });
-    foot.append(chevron);
-    card.append(foot, details);
+    article.append(details);
   }
-  return card;
+  return article;
 }
 
 function renderDetails(item, orders) {
@@ -335,14 +369,12 @@ function renderDetails(item, orders) {
   box.className = "details";
   const expected = money(item.expectedFinancialResult);
   const commission = money(item.commission);
-  if (expected) {
+  const moneyBits = [];
+  if (expected) moneyBits.push(`За сессию ${expected.text}`);
+  if (commission) moneyBits.push(`комиссия ${commission.text}`);
+  if (moneyBits.length) {
     const line = document.createElement("p");
-    line.textContent = `За сессию ${expected.text}`;
-    box.append(line);
-  }
-  if (commission) {
-    const line = document.createElement("p");
-    line.textContent = `Комиссия ${commission.text}`;
+    line.textContent = moneyBits.join(" · ");
     box.append(line);
   }
   const count = finite(item.orderCount);
@@ -357,14 +389,15 @@ function renderDetails(item, orders) {
     const side = orderSide(order.direction);
     const direction = document.createElement("span");
     direction.className = side === "buy" ? "side up" : side === "sell" ? "side down" : "side";
-    direction.textContent = shown(order.direction);
+    if (side === "buy" || side === "sell") direction.append(icon(side === "buy" ? "up" : "down"));
+    else direction.textContent = shown(order.direction);
     line.append(direction);
     const bits = [];
-    const lots = formatLots(order.lots);
+    const orderLots = formatLots(order.lots);
     const price = formatPlain(order.price);
-    if (lots) bits.push(lots);
+    if (orderLots) bits.push(orderLots);
     if (price) bits.push(`@ ${price}`);
-    if (bits.length) line.append(document.createTextNode(` ${bits.join(" ")}`));
+    if (bits.length) line.append(document.createTextNode(bits.join(" ")));
     box.append(line);
   }
   return box.childNodes.length ? box : null;
@@ -447,6 +480,7 @@ function formatClock(timestamp) {
 }
 
 async function render() {
+  privacyButton.classList.add("busy");
   const state = await send({ type: "getStatus" });
   const canShow = paintChrome(state);
   if (!canShow) {
@@ -454,7 +488,8 @@ async function render() {
     await send({ type: "seen" });
     return;
   }
-  renderPositions(state.lastSnapshot, state.snapshotAt, { loading: true });
+  renderPositions(state.lastSnapshot, state.snapshotAt);
+  privacyButton.classList.add("busy");
   await send({ type: "poll" });
   const fresh = await send({ type: "getStatus" });
   if (!paintChrome(fresh)) {
@@ -471,37 +506,48 @@ infoButton.addEventListener("click", () => togglePanel(infoButton, infoPanel));
 
 grantButton.addEventListener("click", async () => {
   grantButton.disabled = true;
+  let failure = "";
   try {
     const config = await loadRemoteConfig();
     const granted = await chrome.permissions.request({ origins: accessOrigins(config) });
-    if (!granted) {
-      setStatus("Доступ не выдан.");
-    }
+    if (!granted) failure = "Доступ не выдан.";
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : "Не удалось запросить доступ");
+    failure = error instanceof Error ? error.message : "Не удалось запросить доступ";
   }
   await render();
+  if (failure) setAlert(failure);
+});
+
+updateButton.addEventListener("click", () => {
+  if (updateUrl) chrome.tabs.create({ url: updateUrl });
 });
 
 linkButton.addEventListener("click", async () => {
   linkButton.disabled = true;
-  setStatus("Открываю Telegram…");
+  linkButton.classList.add("busy");
+  setTip(linkButton, linkTip, "Открываю Telegram…");
   try {
     const config = await loadRemoteConfig();
     const jwt = await readJwt(config.whitelist.positionUrl);
     if (!jwt) {
-      setStatus("Cookie jwt не найдена. Войдите на сайт.");
+      linkButton.classList.remove("busy");
+      setTip(linkButton, linkTip, linkTipText(viewState));
+      setAlert("Cookie jwt не найдена. Войдите на сайт.");
       linkButton.disabled = false;
       return;
     }
     const result = await send({ type: "link", jwt });
     if (result?.error) {
-      setStatus(result.error);
+      linkButton.classList.remove("busy");
+      setTip(linkButton, linkTip, linkTipText(viewState));
+      setAlert(result.error);
       linkButton.disabled = false;
       return;
     }
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : "Не удалось открыть Telegram");
+    linkButton.classList.remove("busy");
+    setTip(linkButton, linkTip, linkTipText(viewState));
+    setAlert(error instanceof Error ? error.message : "Не удалось открыть Telegram");
     linkButton.disabled = false;
     return;
   }
@@ -524,15 +570,17 @@ async function readJwt(positionUrl) {
 async function resolveConflict(choice) {
   prefsPush.disabled = true;
   prefsPull.disabled = true;
+  let failure = "";
   try {
     const result = await send({ type: "resolvePrefs", choice });
-    if (result?.error) setStatus(result.error);
+    if (result?.error) failure = result.error;
   } catch (error) {
-    setStatus(error instanceof Error ? error.message : "Не удалось синхронизировать настройки");
+    failure = error instanceof Error ? error.message : "Не удалось синхронизировать настройки";
   }
   prefsPush.disabled = false;
   prefsPull.disabled = false;
   await render();
+  if (failure) setAlert(failure);
 }
 
 prefsPush.addEventListener("click", () => resolveConflict("push"));

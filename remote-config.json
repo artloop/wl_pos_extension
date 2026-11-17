@@ -10,8 +10,8 @@
     "positionUrl": "https://api.moex.whitelist.capital/api/v1/user/position"
   },
   "update": {
-    "latestVersion": "1.1.0",
-    "notes": "Можно не отправлять данные на сервер. Для Telegram это включается само.",
+    "latestVersion": "1.1.1",
+    "notes": "Позиции — узкий список. Адрес стенда скрыт, ошибка связи по-русски.",
     "downloadUrl": "https://github.com/artloop/wl_pos_extension/releases/latest"
   }
 }

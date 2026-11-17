@@ -213,7 +213,7 @@ async function collectStatus() {
     snapshotAt: state.snapshotAt,
     configError,
     permissionGranted,
-    backend: config?.backend.baseUrl || null,
+    backend: Boolean(config?.backend.baseUrl),
     prefsConflict: Boolean(state.prefsConflict) && share,
     shareWithServer: share,
     shareLocked: Boolean(state.linked || state.pendingCode),
@@ -403,9 +403,18 @@ async function ensureSession(config, jwt) {
   return login(config, jwt, deviceId);
 }
 
+async function fetchStand(url, options) {
+  try {
+    return await fetch(url, options);
+  } catch (error) {
+    if (error instanceof TypeError) throw new Error("Не удалось подключиться к стенду");
+    throw error;
+  }
+}
+
 async function login(config, jwt, deviceId) {
   const sealed = await sealSessionRequest(config.backend.publicKey, jwt);
-  const response = await fetch(joinUrl(config.backend.baseUrl, config.backend.sessionPath), {
+  const response = await fetchStand(joinUrl(config.backend.baseUrl, config.backend.sessionPath), {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
@@ -443,7 +452,7 @@ async function login(config, jwt, deviceId) {
 async function postChannel(config, session, message) {
   const seq = Number(session.channelSeq || 0) + 1;
   const body = await sealChannel(session.sessionKey, session.sessionId, { ...message, seq });
-  const response = await fetch(joinUrl(config.backend.baseUrl, config.backend.channelPath), {
+  const response = await fetchStand(joinUrl(config.backend.baseUrl, config.backend.channelPath), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
