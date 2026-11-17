@@ -381,17 +381,58 @@ async function syncBackend(config, jwt, extra = {}) {
 async function syncLocked(config, jwt, extra) {
   const explicit = extra.consent === false || extra.pair || extra.intent;
   if (!explicit && !(await currentShare())) return { skipped: true };
+  const before = await getState();
   let session = await ensureSession(config, jwt);
+  if (session.lostLink) {
+    await releaseUnlinked(config, session);
+    return { linked: false, siteUserId: session.sessionSiteUserId || null };
+  }
   await adoptIdentity(session.sessionSiteUserId);
   const resolving = extra.intent === "resolve-push" || extra.intent === "resolve-pull";
-  let payload = await exchange(config, session, jwt, extra);
+  let payload;
+  try {
+    payload = await exchange(config, session, jwt, extra);
+  } catch (error) {
+    if (!error.lostLink) throw error;
+    await releaseUnlinked(config, session);
+    return { linked: false, siteUserId: session.sessionSiteUserId || null };
+  }
   if (payload.relogin) {
     await clearSession();
     session = await login(config, jwt, await ensureDeviceId());
+    if (session.lostLink) {
+      await releaseUnlinked(config, session);
+      return { linked: false, siteUserId: session.sessionSiteUserId || null };
+    }
     payload = await exchange(config, session, jwt, extra);
   }
   await applyChannel(payload, jwt, resolving);
+  if (telegramLeft(before, payload)) await releaseUnlinked(config, session);
   return payload;
+}
+
+function telegramLeft(before, payload) {
+  if (!before.linked || payload?.linked !== false || before.pendingCode) return false;
+  if (before.siteUserId && payload.siteUserId && before.siteUserId !== payload.siteUserId) return false;
+  return true;
+}
+
+async function releaseUnlinked(config, session) {
+  try {
+    if (session?.sessionId && session?.sessionKey) await postChannel(config, session, { consent: false });
+  } catch (error) {
+    if (!error.relogin) console.info("Не удалось стереть токен отвязанного кабинета");
+  }
+  await clearSession();
+  await chrome.storage.local.set({
+    shareWithServer: false,
+    linked: false,
+    jwtHash: null,
+    pendingCode: null,
+    prefsRevision: null,
+    prefsConflict: false,
+    prefsDirty: true,
+  });
 }
 
 async function exchange(config, session, jwt, extra) {
@@ -408,6 +449,12 @@ async function exchange(config, session, jwt, extra) {
     session.sessionExpires = next.sessionExpires;
     session.channelSeq = next.channelSeq;
     session.sessionSiteUserId = next.sessionSiteUserId;
+    session.lostLink = next.lostLink;
+    if (next.lostLink) {
+      const stop = new Error("Кабинет больше не привязан к Telegram");
+      stop.lostLink = true;
+      throw stop;
+    }
     const retry = await buildMessage(jwt, extra);
     const payload = await postChannel(config, session, retry);
     payload.sentPrefs = retry.prefs;
@@ -474,16 +521,21 @@ async function login(config, jwt, deviceId) {
   }
   const payload = await openSessionResponse(sealed.aes, envelope);
   if (!payload.sessionId || !payload.key) throw new Error("Стенд не открыл сессию");
+  const prior = await getState();
+  const siteUserId = payload.siteUserId || null;
+  const sameCabinet = !prior.siteUserId || prior.siteUserId === siteUserId;
+  const lostLink = Boolean(prior.linked && !payload.linked && !prior.pendingCode && sameCabinet);
   const session = {
     sessionId: payload.sessionId,
     sessionKey: payload.key,
     sessionExpires: Date.parse(payload.expiresAt),
     channelSeq: 0,
-    sessionSiteUserId: payload.siteUserId || null,
+    sessionSiteUserId: siteUserId,
   };
   await chrome.storage.session.set(session);
+  if (lostLink) return { ...session, lostLink: true };
   await chrome.storage.local.set({
-    siteUserId: payload.siteUserId || null,
+    siteUserId,
     linked: Boolean(payload.linked),
     jwtHash: await digest(jwt),
   });
