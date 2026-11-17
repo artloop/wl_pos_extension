@@ -15,7 +15,16 @@ export function readSub(jwt) {
   }
 }
 
+export async function sealToServer(publicKeyB64, payload) {
+  const sealed = await sealForServer(publicKeyB64, payload);
+  return { ephPublic: sealed.ephPublic, n: sealed.n, c: sealed.c };
+}
+
 export async function sealSessionRequest(publicKeyB64, jwt) {
+  return sealForServer(publicKeyB64, { jwt });
+}
+
+async function sealForServer(publicKeyB64, payload) {
   const server = await crypto.subtle.importKey(
     "spki",
     bytesFromBase64(publicKeyB64),
@@ -27,7 +36,7 @@ export async function sealSessionRequest(publicKeyB64, jwt) {
   const shared = await crypto.subtle.deriveBits({ name: "ECDH", public: server }, eph.privateKey, 256);
   const aes = await handshakeKey(shared);
   const ephPublic = bytesToBase64(new Uint8Array(await crypto.subtle.exportKey("spki", eph.publicKey)));
-  const sealed = await encryptJson(aes, AAD_REQUEST, { jwt });
+  const sealed = await encryptJson(aes, AAD_REQUEST, payload);
   return { ephPublic, n: sealed.n, c: sealed.c, aes };
 }
 

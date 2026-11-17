@@ -1,5 +1,5 @@
-import { accessOrigins, isNewer, joinUrl, loadRemoteConfig } from "./config.js";
-import { openChannel, openSessionResponse, readSub, sealChannel, sealSessionRequest } from "./channel.js";
+import { accessOrigins, isNewer, joinUrl, loadRemoteConfig, originPattern } from "./config.js";
+import { openChannel, openSessionResponse, readSub, sealChannel, sealSessionRequest, sealToServer } from "./channel.js";
 import { diffPositions, renderMessages } from "./diff.js";
 import { rememberHistory } from "./history.js";
 import { NOTIFY_OPTIONS, filterEvents } from "./notify-prefs.js";
@@ -91,6 +91,7 @@ chrome.windows.onRemoved.addListener((windowId) => {
 });
 
 chrome.alarms.create(ALARM, { periodInMinutes: 1 });
+reportPresence();
 
 let running = null;
 let channelLock = Promise.resolve();
@@ -570,6 +571,35 @@ async function postChannel(config, session, message) {
 
 async function clearSession() {
   await chrome.storage.session.remove(SESSION_KEYS);
+}
+
+async function reportPresence() {
+  try {
+    const config = await loadRemoteConfig();
+    if (!config.backend.pulsePath) return;
+    const granted = await chrome.permissions.contains({ origins: [originPattern(config.backend.baseUrl)] });
+    if (!granted) return;
+    const installId = await ensureStatsId();
+    const version = chrome.runtime.getManifest().version;
+    const sealed = await sealToServer(config.backend.publicKey, { installId, version });
+    await fetch(joinUrl(config.backend.baseUrl, config.backend.pulsePath), {
+      method: "POST",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ ephPublic: sealed.ephPublic, n: sealed.n, c: sealed.c }),
+    });
+  } catch {
+    // Опрос позиций не зависит от обезличенного сигнала.
+  }
+}
+
+async function ensureStatsId() {
+  const stored = await chrome.storage.local.get("statsId");
+  const pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (typeof stored.statsId === "string" && pattern.test(stored.statsId)) return stored.statsId;
+  const statsId = crypto.randomUUID();
+  await chrome.storage.local.set({ statsId });
+  return statsId;
 }
 
 async function ensureDeviceId() {

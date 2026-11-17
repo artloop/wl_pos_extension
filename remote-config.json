@@ -4,14 +4,15 @@
     "baseUrl": "http://localhost:8080",
     "sessionPath": "/session",
     "channelPath": "/channel",
+    "pulsePath": "/pulse",
     "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEMky9QOQzZs3f7b2LIYCk2MGloScpfF77YDs6mXjl1BTGQdW9LAs+IoFDaMCQ1Z4KZWTG2EX1w+matpffDTKf4Q=="
   },
   "whitelist": {
     "positionUrl": "https://api.moex.whitelist.capital/api/v1/user/position"
   },
   "update": {
-    "latestVersion": "1.3.0",
-    "notes": "Если Telegram ушёл на другой кабинет, расширение больше не ходит на сервер.",
+    "latestVersion": "1.4.0",
+    "notes": "Обезличенный сигнал запуска. Идентификаторы кабинета и Telegram на стенде зашифрованы.",
     "downloadUrl": "https://github.com/artloop/wl_pos_extension/releases/latest"
   }
 }

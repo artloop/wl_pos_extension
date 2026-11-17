@@ -8,6 +8,7 @@ export function parseConfig(data) {
   const baseUrl = data.backend?.baseUrl;
   const sessionPath = data.backend?.sessionPath;
   const channelPath = data.backend?.channelPath;
+  const pulsePath = data.backend?.pulsePath || "";
   const publicKey = data.backend?.publicKey;
   const positionUrl = data.whitelist?.positionUrl;
   const latestVersion = data.update?.latestVersion;
@@ -16,7 +17,7 @@ export function parseConfig(data) {
   }
   return {
     schemaVersion: 2,
-    backend: { baseUrl, sessionPath, channelPath, publicKey },
+    backend: { baseUrl, sessionPath, channelPath, pulsePath, publicKey },
     whitelist: { positionUrl },
     update: {
       latestVersion,
