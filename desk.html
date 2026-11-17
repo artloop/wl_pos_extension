@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Позиции Whitelist</title>
+    <link rel="stylesheet" href="desk.css" />
+  </head>
+  <body class="desk">
+    <main>
+      <header>
+        <h1>Позиции Whitelist</h1>
+        <div class="icon-actions">
+          <button id="privacy-status" class="icon-btn busy" type="button" aria-label="Загрузка…">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path fill="currentColor" d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z" />
+            </svg>
+            <span id="privacy-tip" class="tip">Загрузка…</span>
+          </button>
+          <button id="alert" class="icon-btn alert" type="button" hidden>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path fill="currentColor" d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+            </svg>
+            <span id="alert-tip" class="tip"></span>
+          </button>
+          <button id="banners" class="icon-btn warn" type="button" hidden>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path
+                fill="currentColor"
+                fill-rule="evenodd"
+                d="M18 16v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-6 6a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zM1.5 6.2 6.2 1.5 22.5 17.8 17.8 22.5z"
+              />
+            </svg>
+            <span id="banners-tip" class="tip"></span>
+          </button>
+          <button id="update" class="icon-btn warn" type="button" hidden>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path fill="currentColor" d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z" />
+            </svg>
+            <span id="update-tip" class="tip"></span>
+          </button>
+          <button id="link" class="icon-btn" type="button" disabled>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path fill="currentColor" d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+            <span id="link-tip" class="tip"></span>
+          </button>
+          <button id="settings" class="icon-btn" type="button" aria-expanded="false" aria-label="Какие оповещения показывать" title="Какие оповещения показывать">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"
+              />
+            </svg>
+          </button>
+          <button id="info" class="icon-btn" type="button" aria-expanded="false" aria-label="Сведения" title="Сведения">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+            </svg>
+          </button>
+        </div>
+      </header>
+      <div id="prefs-conflict" class="panel conflict" hidden>
+        <p>На сервере другие настройки оповещений для этого кабинета. Перенести настройки этого браузера на сервер?</p>
+        <div class="conflict-actions">
+          <button id="prefs-push" type="button">Перенести</button>
+          <button id="prefs-pull" class="secondary" type="button">Взять с сервера</button>
+        </div>
+      </div>
+      <div id="settings-panel" class="panel" hidden></div>
+      <div id="info-panel" class="panel" hidden>
+        <p id="version"></p>
+        <p id="backend"></p>
+        <p id="link-state"></p>
+        <p id="banner-state"></p>
+        <p id="privacy-info"></p>
+        <p class="copyright">© 2026 <a href="https://t.me/ArtloopTeam" target="_blank" rel="noopener">artloop</a></p>
+      </div>
+      <button id="grant" type="button" hidden>Разрешить доступ</button>
+      <div id="positions" hidden></div>
+      <section id="history">
+        <button id="history-toggle" type="button" aria-expanded="false">
+          <span>История</span>
+          <span id="history-count" class="count">0</span>
+          <svg class="chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <path fill="currentColor" d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+          </svg>
+        </button>
+        <div id="history-list" hidden></div>
+      </section>
+    </main>
+    <script type="module" src="desk.js"></script>
+  </body>
+</html>

@@ -1,0 +1,135 @@
+@import url("popup.css");
+
+html,
+body.desk {
+  width: auto;
+  min-width: 720px;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+}
+
+body.desk {
+  font-size: 14px;
+  overflow: auto;
+}
+
+body.desk #positions {
+  max-height: none;
+  overflow: visible;
+}
+
+body.desk #positions .columns,
+body.desk #positions .summary {
+  grid-template-columns: 3px minmax(7rem, 1.6fr) 5.5rem 8.5rem 8.5rem 8rem 4.5rem 14px;
+  min-height: 40px;
+}
+
+body.desk #positions .columns {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: #c5d0e0;
+  font-size: 12px;
+}
+
+body.desk #positions .columns > span {
+  display: flex;
+  justify-content: flex-end;
+}
+
+body.desk #positions .columns > span:nth-child(2) {
+  justify-content: flex-start;
+}
+
+body.desk #positions .pnl,
+body.desk #positions .qty {
+  justify-content: flex-end;
+}
+
+#history {
+  margin-top: 16px;
+}
+
+#history-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 2px;
+  border: 0;
+  border-bottom: 1px solid #314056;
+  border-radius: 0;
+  background: transparent;
+  color: #c5d0e0;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+#history-toggle .chevron {
+  margin-left: auto;
+  color: #c5d0e0;
+}
+
+#history-toggle .chevron.open {
+  transform: rotate(180deg);
+}
+
+#history-list {
+  margin-top: 4px;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  border-bottom: 1px solid #314056;
+}
+
+.history-time {
+  flex: none;
+  width: 4.6rem;
+  color: #c5d0e0;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-row .tool {
+  flex: none;
+  width: 8rem;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #c5d0e0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mark.up {
+  color: #3ddc97;
+}
+
+.mark.down {
+  color: #ff5c7a;
+}

@@ -10,8 +10,8 @@
     "positionUrl": "https://api.moex.whitelist.capital/api/v1/user/position"
   },
   "update": {
-    "latestVersion": "1.1.1",
-    "notes": "Позиции — узкий список. Адрес стенда скрыт, ошибка связи по-русски.",
+    "latestVersion": "1.2.0",
+    "notes": "Позиции можно открыть в окне с историей изменений.",
     "downloadUrl": "https://github.com/artloop/wl_pos_extension/releases/latest"
   }
 }

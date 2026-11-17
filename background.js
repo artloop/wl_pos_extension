@@ -1,9 +1,12 @@
 import { accessOrigins, isNewer, joinUrl, loadRemoteConfig } from "./config.js";
 import { openChannel, openSessionResponse, readSub, sealChannel, sealSessionRequest } from "./channel.js";
 import { diffPositions, renderMessages } from "./diff.js";
+import { rememberHistory } from "./history.js";
 import { NOTIFY_OPTIONS, filterEvents } from "./notify-prefs.js";
 
 const ALARM = "positions";
+const DESK_KEY = "deskWindowId";
+const history = [];
 const SESSION_KEYS = ["sessionId", "sessionKey", "sessionExpires", "channelSeq", "sessionSiteUserId"];
 const EMPTY_STATE = {
   linked: false,
@@ -68,7 +71,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((error) => sendResponse({ error: error instanceof Error ? error.message : "Не удалось изменить сохранение на сервере" }));
     return true;
   }
+  if (message?.type === "openDesk") {
+    openDesk()
+      .then(sendResponse)
+      .catch((error) => sendResponse({ error: error instanceof Error ? error.message : "Не удалось открыть окно" }));
+    return true;
+  }
+  if (message?.type === "getHistory") {
+    sendResponse({ history });
+    return false;
+  }
   return false;
+});
+
+chrome.windows.onRemoved.addListener((windowId) => {
+  chrome.storage.session.get(DESK_KEY).then((stored) => {
+    if (stored[DESK_KEY] === windowId) chrome.storage.session.remove(DESK_KEY);
+  });
 });
 
 chrome.alarms.create(ALARM, { periodInMinutes: 1 });
@@ -248,6 +267,7 @@ async function pollOnce() {
     const state = await getState();
     const positions = await fetchPositions(config.whitelist.positionUrl, jwt);
     const events = state.lastSnapshot ? diffPositions(state.lastSnapshot, positions) : [];
+    if (state.lastSnapshot && events.length) rememberHistory(history, events, Date.now());
     const fresh = await getState();
     if (!state.lastSnapshot) {
       console.info("Позиции: первая загрузка, уведомление не отправляю");
@@ -282,6 +302,28 @@ async function pollOnce() {
     await chrome.storage.local.set({ lastError: syncError || message });
     return { ok: false, error: message };
   }
+}
+
+async function openDesk() {
+  const stored = await chrome.storage.session.get(DESK_KEY);
+  const existing = stored[DESK_KEY];
+  if (existing != null) {
+    try {
+      await chrome.windows.update(existing, { focused: true });
+      return { ok: true };
+    } catch {
+      await chrome.storage.session.remove(DESK_KEY);
+    }
+  }
+  const created = await chrome.windows.create({
+    url: chrome.runtime.getURL("desk.html"),
+    type: "popup",
+    width: 960,
+    height: 720,
+    focused: true,
+  });
+  if (created?.id != null) await chrome.storage.session.set({ [DESK_KEY]: created.id });
+  return { ok: true };
 }
 
 async function maybeNotifyUpdate(config) {
