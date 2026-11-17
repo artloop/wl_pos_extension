@@ -1,13 +1,29 @@
+html {
+  padding: 6px;
+  background: #0d1117;
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
-  width: 320px;
+  width: 440px;
+  overflow: hidden;
   color: #e8edf5;
   background: #161b22;
+  border: 1px solid #3a4454;
+  border-radius: 16px;
   font: 13px/1.4 "Segoe UI", sans-serif;
 }
 
 main {
-  padding: 16px;
+  padding: 14px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 h1 {
@@ -15,25 +31,256 @@ h1 {
   font-size: 16px;
 }
 
-#version,
-.muted {
+.icon-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  color: #9aa6b8;
+  background: transparent;
+}
+
+.icon-btn:hover,
+.icon-btn[aria-expanded="true"] {
+  color: #e8edf5;
+  background: #2a3140;
+}
+
+.icon-btn.on {
+  color: #7eb6ff;
+}
+
+.icon-btn .tip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 2;
+  width: max-content;
+  max-width: 220px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #2a3140;
+  color: #e8edf5;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+}
+
+.icon-btn:hover .tip,
+.icon-btn:focus-visible .tip {
+  display: block;
+}
+
+.status {
+  margin: 10px 0;
+}
+
+.panel {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border: 1px solid #2a3140;
+  border-radius: 12px;
+  background: #1c212b;
+  color: #c5d0de;
+}
+
+.panel p,
+.panel-title {
+  margin: 4px 0;
+}
+
+.panel-title {
+  color: #9aa6b8;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.panel-title:first-child {
+  margin-top: 0;
+}
+
+.checks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 10px;
+  margin-bottom: 6px;
+}
+
+.checks label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.checks input {
+  accent-color: #3b82f6;
+}
+
+#positions {
+  max-height: 420px;
+  margin: 10px 0 0;
+  overflow-y: auto;
+}
+
+#positions h2 {
+  margin: 12px 0 6px;
+  color: #9aa6b8;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#positions > section:first-of-type h2 {
+  margin-top: 0;
+}
+
+#positions .cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: 8px;
+}
+
+#positions article {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #2a3140;
+  border-radius: 12px;
+  background: #1c212b;
+}
+
+#positions .head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 0;
+}
+
+#positions .head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#positions .pnl {
+  margin: 4px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+#positions .pnl.up,
+#positions .side.up {
+  color: #3dcc8e;
+}
+
+#positions .pnl.down,
+#positions .side.down {
+  color: #f07178;
+}
+
+#positions .badge {
+  flex: none;
+  margin: 0;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #2a3140;
+  color: #e8edf5;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+#positions .foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: #8b97a8;
+  font-size: 12px;
+}
+
+#positions .details {
+  margin-top: 8px;
+  color: #9aa6b8;
+  font-size: 12px;
+}
+
+#positions .details p,
+.positions-meta,
+.positions-note {
   margin: 4px 0 0;
   color: #9aa6b8;
 }
 
-.status {
-  margin: 14px 0;
+#positions .order {
+  margin: 2px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+
+#positions .side {
+  font-weight: 600;
+}
+
+#positions button.chevron {
+  width: 22px;
+  height: 22px;
+  margin: 0 0 0 auto;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #8b97a8;
+  font-size: 14px;
+  line-height: 1;
+}
+
+#positions button.chevron:hover {
+  background: #2a3140;
+  color: #e8edf5;
 }
 
 .update {
-  margin: 0 0 12px;
+  margin: 10px 0 0;
   color: #f0c674;
 }
 
-.actions {
+.conflict-actions {
   display: flex;
-  flex-direction: column;
   gap: 8px;
+  margin-top: 8px;
+}
+
+.conflict-actions button {
+  flex: 1;
+  padding: 8px 10px;
+}
+
+.conflict-actions .secondary {
+  color: #e8edf5;
+  background: #2a3140;
+}
+
+#grant {
+  width: 100%;
+  margin: 10px 0 0;
 }
 
 button {
@@ -43,11 +290,6 @@ button {
   color: #fff;
   background: #3b82f6;
   cursor: pointer;
-}
-
-button.secondary {
-  color: #d7deea;
-  background: #2a3340;
 }
 
 button:disabled {

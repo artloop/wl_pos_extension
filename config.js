@@ -2,19 +2,21 @@ export const CONFIG_URL =
   "https://raw.githubusercontent.com/artloop/wl_pos_extension/main/remote-config.json";
 
 export function parseConfig(data) {
-  if (!data || data.schemaVersion !== 1) {
+  if (!data || data.schemaVersion !== 2) {
     throw new Error("Неизвестная схема конфигурации");
   }
   const baseUrl = data.backend?.baseUrl;
-  const pairPath = data.backend?.pairPath;
+  const sessionPath = data.backend?.sessionPath;
+  const channelPath = data.backend?.channelPath;
+  const publicKey = data.backend?.publicKey;
   const positionUrl = data.whitelist?.positionUrl;
   const latestVersion = data.update?.latestVersion;
-  if (!baseUrl || !pairPath || !positionUrl || !latestVersion) {
+  if (!baseUrl || !sessionPath || !channelPath || !publicKey || !positionUrl || !latestVersion) {
     throw new Error("В конфигурации нет адресов");
   }
   return {
-    schemaVersion: 1,
-    backend: { baseUrl, pairPath },
+    schemaVersion: 2,
+    backend: { baseUrl, sessionPath, channelPath, publicKey },
     whitelist: { positionUrl },
     update: {
       latestVersion,

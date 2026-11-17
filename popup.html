@@ -9,15 +9,46 @@
     <main>
       <header>
         <h1>Позиции Whitelist</h1>
-        <p id="version"></p>
+        <div class="icon-actions">
+          <button id="link" class="icon-btn" type="button" disabled>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path fill="currentColor" d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+            <span id="link-tip" class="tip"></span>
+          </button>
+          <button id="settings" class="icon-btn" type="button" aria-expanded="false" aria-label="Какие оповещения показывать" title="Какие оповещения показывать">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"
+              />
+            </svg>
+          </button>
+          <button id="info" class="icon-btn" type="button" aria-expanded="false" aria-label="Сведения" title="Сведения">
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+            </svg>
+          </button>
+        </div>
       </header>
       <p id="status" class="status">Загрузка…</p>
-      <p id="backend" class="muted"></p>
-      <p id="update" class="update" hidden></p>
-      <div class="actions">
-        <button id="grant" type="button">Разрешить доступ</button>
-        <button id="link" type="button">Следить в Telegram</button>
+      <div id="prefs-conflict" class="panel conflict" hidden>
+        <p>На сервере другие настройки оповещений для этого кабинета. Перенести настройки этого браузера на сервер?</p>
+        <div class="conflict-actions">
+          <button id="prefs-push" type="button">Перенести</button>
+          <button id="prefs-pull" class="secondary" type="button">Взять с сервера</button>
+        </div>
       </div>
+      <div id="settings-panel" class="panel" hidden></div>
+      <div id="info-panel" class="panel" hidden>
+        <p id="version"></p>
+        <p id="backend"></p>
+        <p id="link-state"></p>
+        <p id="banner-state"></p>
+      </div>
+      <p id="update" class="update" hidden></p>
+      <button id="grant" type="button" hidden>Разрешить доступ</button>
+      <div id="positions" hidden></div>
     </main>
     <script type="module" src="popup.js"></script>
   </body>

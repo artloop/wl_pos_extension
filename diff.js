@@ -9,7 +9,7 @@ const MARKET_TITLE = {
 const FIELD_TITLE = {
   type: "направление",
   position: "объём",
-  expectedFinancialResult: "ожидаемый результат",
+  expectedFinancialResult: "результат за сессию",
   openedFinancialResult: "открытый результат",
   commission: "комиссия",
   orders: "заявки",
@@ -42,19 +42,58 @@ function same(left, right) {
   return String(left) === String(right);
 }
 
+function isZeroPosition(item) {
+  const value = Number(item?.position);
+  return Number.isFinite(value) && value === 0;
+}
+
+export function isActiveInstrument(item) {
+  if (!item || typeof item.tool !== "string" || !item.tool) return false;
+  const position = Number(item.position);
+  if (Number.isFinite(position) && position !== 0) return true;
+  return hasOrders(item);
+}
+
+function hasOrders(item) {
+  const count = Number(item?.orderCount);
+  if (Number.isFinite(count) && count !== 0) return true;
+  return ordersOf(item).length > 0;
+}
+
+function ordersEvent(market, tool, previous, item) {
+  return {
+    kind: "changed",
+    market,
+    tool,
+    changes: ["orders"],
+    previous,
+    item,
+  };
+}
+
 export function diffPositions(previous, current) {
   const oldPositions = indexPositions(previous);
   const newPositions = indexPositions(current);
   const events = [];
 
   for (const [key, value] of newPositions) {
-    if (!oldPositions.has(key)) {
+    if (oldPositions.has(key)) continue;
+    if (!isZeroPosition(value.item)) {
       events.push({ kind: "opened", market: value.market, tool: value.item.tool, item: value.item });
+      continue;
+    }
+    if (hasOrders(value.item)) {
+      events.push(ordersEvent(value.market, value.item.tool, { orderCount: 0, orders: [] }, value.item));
     }
   }
   for (const [key, value] of oldPositions) {
-    if (!newPositions.has(key)) {
+    if (newPositions.has(key)) continue;
+    if (!isZeroPosition(value.item)) {
       events.push({ kind: "closed", market: value.market, tool: value.item.tool, item: value.item });
+      continue;
+    }
+    if (hasOrders(value.item)) {
+      events.push(ordersEvent(value.market, value.item.tool, value.item, { orderCount: 0, orders: [] }));
     }
   }
   for (const [key, value] of newPositions) {
@@ -97,7 +136,7 @@ function renderEvent(event) {
     return [
       header,
       `Позиция появилась: ${valueOf(event.item, "type")}, объём ${valueOf(event.item, "position")}`,
-      `Ожидаемый результат: ${valueOf(event.item, "expectedFinancialResult")}`,
+      `Результат за сессию: ${valueOf(event.item, "expectedFinancialResult")}`,
       `Заявок: ${valueOf(event.item, "orderCount")}`,
     ].join("\n");
   }

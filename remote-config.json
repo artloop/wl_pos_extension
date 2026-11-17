@@ -1,15 +1,17 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "backend": {
     "baseUrl": "http://localhost:8080",
-    "pairPath": "/pair"
+    "sessionPath": "/session",
+    "channelPath": "/channel",
+    "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEMky9QOQzZs3f7b2LIYCk2MGloScpfF77YDs6mXjl1BTGQdW9LAs+IoFDaMCQ1Z4KZWTG2EX1w+matpffDTKf4Q=="
   },
   "whitelist": {
     "positionUrl": "https://api.moex.whitelist.capital/api/v1/user/position"
   },
   "update": {
-    "latestVersion": "0.1.0",
-    "notes": "",
+    "latestVersion": "1.0.0",
+    "notes": "Выбор оповещений синхронизируется со стендом.",
     "downloadUrl": "https://github.com/artloop/wl_pos_extension/releases/latest"
   }
 }
