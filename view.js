@@ -532,7 +532,7 @@ function renderHistoryRow(entry) {
   marks.className = "marks";
   for (const mark of entry.marks || []) {
     const item = document.createElement("span");
-    item.className = mark.tone ? `mark ${mark.tone}` : "mark";
+    item.className = ["mark", mark.kind, mark.tone].filter(Boolean).join(" ");
     if (mark.label) item.setAttribute("aria-label", mark.label);
     const parts = Array.isArray(mark.icons) ? mark.icons : mark.icon ? [{ icon: mark.icon }] : [];
     for (const part of parts) {
@@ -544,7 +544,14 @@ function renderHistoryRow(entry) {
         title.textContent = part.label;
         glyph.prepend(title);
       }
-      item.append(glyph);
+      if (part.badge) {
+        const badge = document.createElement("span");
+        badge.className = "side";
+        badge.append(glyph);
+        item.append(badge);
+      } else {
+        item.append(glyph);
+      }
     }
     if (mark.value) {
       const value = document.createElement("span");

@@ -199,8 +199,8 @@ function sideWord(side) {
 }
 
 function sideIcon(side) {
-  if (side === "buy") return { icon: "up", tone: "up", label: "Покупка" };
-  if (side === "sell") return { icon: "down", tone: "down", label: "Продажа" };
+  if (side === "buy") return { icon: "up", tone: "up", label: "Покупка", badge: true };
+  if (side === "sell") return { icon: "down", tone: "down", label: "Продажа", badge: true };
   return null;
 }
 
@@ -233,7 +233,7 @@ function orderMark(action, side, value) {
   const tone = action === "added" ? "up" : action === "removed" ? "down" : null;
   const actionText = action === "added" ? "Выставлена" : action === "removed" ? "Снята" : "";
   const label = [actionText, sideWord(side), value].filter(Boolean).join(" ");
-  return { icons, tone, value, label };
+  return { kind: "order", icons, tone, value, label };
 }
 
 function orderChangeMark(before, after) {
@@ -256,7 +256,7 @@ function orderChangeMark(before, after) {
     if (one) icons.push(one);
   }
   const label = [sideWord(leftSide), leftAmount, "→", sideWord(rightSide), rightAmount].filter(Boolean).join(" ");
-  return { icons, tone: null, value, label };
+  return { kind: "order", icons, tone: null, value, label };
 }
 
 function countLabel(item) {
@@ -297,7 +297,11 @@ function orderDeltaRows(at, tool, before, after) {
     const toN = Number(to);
     const tone = toN > fromN ? "up" : toN < fromN ? "down" : null;
     const value = `всего заявок ${from} → ${to}`;
-    rows.push({ at, tool, marks: [{ icon: "list", tone, value, label: `Всего заявок ${from} → ${to}` }] });
+    rows.push({
+      at,
+      tool,
+      marks: [{ kind: "order", icon: "list", tone, value, label: `Всего заявок ${from} → ${to}` }],
+    });
   }
   return rows;
 }

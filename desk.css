@@ -141,3 +141,31 @@ body.desk #positions .qty {
 .mark svg.down {
   color: #ff5c7a;
 }
+
+.mark.order {
+  gap: 6px;
+  padding: 2px 8px 2px 6px;
+  border: 1px solid #3d4d66;
+  border-radius: 6px;
+  background: #1a2433;
+}
+
+.mark.order.up {
+  border-color: rgba(61, 220, 151, 0.55);
+  background: rgba(61, 220, 151, 0.08);
+}
+
+.mark.order.down {
+  border-color: rgba(255, 92, 122, 0.55);
+  background: rgba(255, 92, 122, 0.08);
+}
+
+.mark.order .side {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: #243044;
+}
