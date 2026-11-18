@@ -376,7 +376,7 @@ async function openDesk() {
     }
   }
   const created = await chrome.windows.create({
-    url: chrome.runtime.getURL("desk.html"),
+    url: chrome.runtime.getURL("ui/desk.html"),
     type: "popup",
     width: 960,
     height: 720,
@@ -394,7 +394,7 @@ async function maybeNotifyUpdate(config) {
   const notes = config.update.notes ? `\n${config.update.notes}` : "";
   await chrome.notifications.create(`wl-update-${config.update.latestVersion}`, {
     type: "basic",
-    iconUrl: chrome.runtime.getURL("icon128.png"),
+    iconUrl: chrome.runtime.getURL("icons/icon128.png"),
     title: "Доступна новая версия расширения",
     message: `Сейчас ${version}, опубликована ${config.update.latestVersion}.${notes}`.slice(0, 500),
   });
@@ -845,7 +845,7 @@ async function notifyPositions(events) {
   const text = renderMessages(events).join("\n\n");
   await chrome.notifications.create(`wl-pos-${Date.now()}`, {
     type: "basic",
-    iconUrl: chrome.runtime.getURL("icon128.png"),
+    iconUrl: chrome.runtime.getURL("icons/icon128.png"),
     title: "Позиции Whitelist",
     message: text.slice(0, 500) || "Позиции изменились",
   });

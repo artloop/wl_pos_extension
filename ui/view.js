@@ -1,5 +1,5 @@
-import { accessOrigins, loadRemoteConfig } from "./config.js";
-import { isActiveInstrument, isDeskInstrument } from "./diff.js";
+import { accessOrigins, loadRemoteConfig } from "../src/config.js";
+import { isActiveInstrument, isDeskInstrument } from "../src/diff.js";
 import {
   finite,
   formatLots,
@@ -11,8 +11,8 @@ import {
   ordersOf,
   sortOrders,
   visibleHistory,
-} from "./history.js";
-import { NOTIFY_OPTIONS } from "./notify-prefs.js";
+} from "../src/history.js";
+import { NOTIFY_OPTIONS } from "../src/notify-prefs.js";
 
 const MARKETS = [
   ["stock", "Акции"],
