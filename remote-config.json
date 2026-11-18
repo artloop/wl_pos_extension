@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
   "backend": {
-    "baseUrl": "http://localhost:8080",
+    "baseUrl": "https://wl.artloop.ru",
     "sessionPath": "/session",
     "channelPath": "/channel",
     "pulsePath": "/pulse",
-    "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEMky9QOQzZs3f7b2LIYCk2MGloScpfF77YDs6mXjl1BTGQdW9LAs+IoFDaMCQ1Z4KZWTG2EX1w+matpffDTKf4Q=="
+    "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEDJ7MF1WmtsR0OdHtYHfeR6dMgl0vBHL+o9lDUzcEzuaP67dX4B2+raHs2BAWR1opq7DDZ18P5nqcpu1MzULY2g=="
   },
   "whitelist": {
     "positionUrl": "https://api.moex.whitelist.capital/api/v1/user/position"
