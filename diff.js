@@ -54,6 +54,14 @@ export function isActiveInstrument(item) {
   return hasOrders(item);
 }
 
+export function isDeskInstrument(item) {
+  if (isActiveInstrument(item)) return true;
+  if (!item || typeof item.tool !== "string" || !item.tool) return false;
+  if (item.commission == null || item.commission === "") return false;
+  const commission = Number(item.commission);
+  return Number.isFinite(commission) && commission !== 0;
+}
+
 function hasOrders(item) {
   const count = Number(item?.orderCount);
   if (Number.isFinite(count) && count !== 0) return true;

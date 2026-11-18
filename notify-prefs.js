@@ -20,6 +20,10 @@ function allowed(prefs) {
   return allow;
 }
 
+export function notifyEnabled(prefs, id) {
+  return allowed(prefs)[id] !== false;
+}
+
 export function filterEvents(events, prefs) {
   const allow = allowed(prefs);
   const visible = [];

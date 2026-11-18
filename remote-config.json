@@ -11,8 +11,8 @@
     "positionUrl": "https://api.moex.whitelist.capital/api/v1/user/position"
   },
   "update": {
-    "latestVersion": "1.4.0",
-    "notes": "Обезличенный сигнал запуска. Идентификаторы кабинета и Telegram на стенде зашифрованы.",
+    "latestVersion": "1.4.1",
+    "notes": "Пока открыты popup или окно, один опрос обновляет позиции каждые 10 секунд. История хранит каждое изменение.",
     "downloadUrl": "https://github.com/artloop/wl_pos_extension/releases/latest"
   }
 }

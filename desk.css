@@ -133,3 +133,11 @@ body.desk #positions .qty {
 .mark.down {
   color: #ff5c7a;
 }
+
+.mark svg.up {
+  color: #3ddc97;
+}
+
+.mark svg.down {
+  color: #ff5c7a;
+}

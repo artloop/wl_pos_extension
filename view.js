@@ -1,5 +1,5 @@
 import { accessOrigins, loadRemoteConfig } from "./config.js";
-import { isActiveInstrument } from "./diff.js";
+import { isActiveInstrument, isDeskInstrument } from "./diff.js";
 import {
   finite,
   formatLots,
@@ -29,6 +29,8 @@ const BANNERS_OFF = "Баннеры браузера выключены. Изм�
 const ICONS = {
   up: "M4 12l1.41 1.41L11 7.83V20h2V7.83l5.59 5.58L20 12l-8-8-8 8z",
   down: "M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.59-5.58L4 12l8 8 8-8z",
+  plus: "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z",
+  minus: "M19 13H5v-2h14v2z",
   list: "M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z",
   chevron: "M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z",
   lots: "M4 8h16v3H4zm0 5h16v3H4z",
@@ -296,7 +298,7 @@ function renderPositions(snapshot, snapshotAt) {
   if (!groups.length) {
     const note = document.createElement("p");
     note.className = "positions-note";
-    note.textContent = "Нет позиций и заявок";
+    note.textContent = layout === "desk" ? "Нет позиций, заявок и комиссии" : "Нет позиций и заявок";
     positionsNode.append(note);
     return;
   }
@@ -348,7 +350,7 @@ function marketGroups(snapshot) {
   const groups = [];
   for (const [market, title] of MARKETS) {
     const items = Array.isArray(snapshot[market]) ? snapshot[market] : [];
-    const visible = items.filter(isActiveInstrument);
+    const visible = items.filter((item) => (layout === "desk" ? isDeskInstrument(item) : isActiveInstrument(item)));
     if (visible.length) groups.push([title, visible]);
   }
   return groups;
@@ -386,6 +388,9 @@ function renderRow(item) {
     lotsText.textContent = formatLots(lots);
     qty.append(lotsText);
     qty.setAttribute("aria-label", `${short ? "Короткая" : "Длинная"} ${formatLots(lots)}`);
+  } else if (layout === "desk" && finite(item.position) === 0) {
+    qty.textContent = "0";
+    qty.setAttribute("aria-label", "Объём 0");
   } else if (layout !== "desk") {
     const shownCount = orders.length > 0 ? orders.length : finite(item.orderCount);
     qty.append(icon("list"));
@@ -529,7 +534,18 @@ function renderHistoryRow(entry) {
     const item = document.createElement("span");
     item.className = mark.tone ? `mark ${mark.tone}` : "mark";
     if (mark.label) item.setAttribute("aria-label", mark.label);
-    if (ICONS[mark.icon]) item.append(icon(mark.icon));
+    const parts = Array.isArray(mark.icons) ? mark.icons : mark.icon ? [{ icon: mark.icon }] : [];
+    for (const part of parts) {
+      if (!ICONS[part.icon]) continue;
+      const glyph = icon(part.icon);
+      if (part.tone) glyph.classList.add(part.tone);
+      if (part.label) {
+        const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        title.textContent = part.label;
+        glyph.prepend(title);
+      }
+      item.append(glyph);
+    }
     if (mark.value) {
       const value = document.createElement("span");
       value.textContent = mark.value;
@@ -551,6 +567,21 @@ async function loadHistory() {
   const result = await send({ type: "getHistory" });
   rawHistory = Array.isArray(result?.history) ? result.history : [];
   paintHistory();
+}
+
+function watchPoll() {
+  let closed = false;
+  const connect = () => {
+    if (closed) return;
+    const port = chrome.runtime.connect({ name: "positions" });
+    port.onDisconnect.addListener(() => {
+      if (!closed) setTimeout(connect, 200);
+    });
+  };
+  window.addEventListener("pagehide", () => {
+    closed = true;
+  });
+  connect();
 }
 
 async function paintStored() {
@@ -695,10 +726,9 @@ export async function bindPage(options = {}) {
       const share = changes.shareWithServer ? changes.shareWithServer.newValue : viewState.shareWithServer;
       conflictPanel.hidden = !conflict || !share;
     }
-    if (layout === "desk" && (changes.lastSnapshot || changes.snapshotAt || changes.lastError)) {
-      paintStored();
-    }
+    if (changes.lastSnapshot || changes.snapshotAt || changes.lastError) paintStored();
   });
+  watchPoll();
   await buildSettings();
   await render();
 }

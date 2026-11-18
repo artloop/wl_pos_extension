@@ -1,12 +1,18 @@
 import { accessOrigins, isNewer, joinUrl, loadRemoteConfig, originPattern } from "./config.js";
 import { openChannel, openSessionResponse, readSub, sealChannel, sealSessionRequest, sealToServer } from "./channel.js";
 import { diffPositions, renderMessages } from "./diff.js";
-import { rememberHistory } from "./history.js";
+import { rememberHistory, restoreHistory } from "./history.js";
 import { NOTIFY_OPTIONS, filterEvents } from "./notify-prefs.js";
 
 const ALARM = "positions";
 const DESK_KEY = "deskWindowId";
-const history = [];
+const HISTORY_KEY = "positionHistory";
+const LIVE_PORT = "positions";
+const LIVE_POLL_MS = 10000;
+const viewers = new Set();
+let liveTimer = null;
+let history = [];
+let historyReady = null;
 const SESSION_KEYS = ["sessionId", "sessionKey", "sessionExpires", "channelSeq", "sessionSiteUserId"];
 const EMPTY_STATE = {
   linked: false,
@@ -31,7 +37,8 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === ALARM) return poll();
+  if (alarm.name !== ALARM || liveTimer != null) return;
+  return poll();
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -78,8 +85,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
   if (message?.type === "getHistory") {
-    sendResponse({ history });
-    return false;
+    readHistory().then((entries) => sendResponse({ history: entries }));
+    return true;
   }
   return false;
 });
@@ -91,10 +98,62 @@ chrome.windows.onRemoved.addListener((windowId) => {
 });
 
 chrome.alarms.create(ALARM, { periodInMinutes: 1 });
+loadHistory();
 reportPresence();
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== LIVE_PORT) return;
+  viewers.add(port);
+  port.onDisconnect.addListener(() => {
+    viewers.delete(port);
+    if (viewers.size === 0 && liveTimer != null) {
+      clearInterval(liveTimer);
+      liveTimer = null;
+    }
+  });
+  if (liveTimer == null) liveTimer = setInterval(() => poll(), LIVE_POLL_MS);
+});
 
 let running = null;
 let channelLock = Promise.resolve();
+
+function loadHistory() {
+  if (!historyReady) {
+    historyReady = chrome.storage.local
+      .get(HISTORY_KEY)
+      .then((stored) => {
+        history = restoreHistory(stored[HISTORY_KEY]);
+      })
+      .catch((error) => {
+        historyReady = null;
+        console.error("История не прочиталась:", error instanceof Error ? error.message : "Ошибка чтения");
+        throw error;
+      });
+  }
+  return historyReady;
+}
+
+async function readHistory() {
+  try {
+    await loadHistory();
+  } catch {
+    return history;
+  }
+  return history;
+}
+
+async function appendHistory(events, at) {
+  await loadHistory();
+  const next = history.slice();
+  rememberHistory(next, events, at);
+  try {
+    await chrome.storage.local.set({ [HISTORY_KEY]: next });
+  } catch (error) {
+    console.error("История не сохранилась:", error instanceof Error ? error.message : "Ошибка записи");
+    throw error;
+  }
+  history = next;
+}
 
 function poll() {
   if (!running) {
@@ -268,7 +327,7 @@ async function pollOnce() {
     const state = await getState();
     const positions = await fetchPositions(config.whitelist.positionUrl, jwt);
     const events = state.lastSnapshot ? diffPositions(state.lastSnapshot, positions) : [];
-    if (state.lastSnapshot && events.length) rememberHistory(history, events, Date.now());
+    if (state.lastSnapshot && events.length) await appendHistory(events, Date.now());
     const fresh = await getState();
     if (!state.lastSnapshot) {
       console.info("Позиции: первая загрузка, уведомление не отправляю");
