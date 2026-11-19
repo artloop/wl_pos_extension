@@ -31,6 +31,7 @@ const EMPTY_STATE = {
   prefsConflict: false,
   prefsKnown: false,
   shareWithServer: false,
+  browserBanners: true,
 };
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -289,6 +290,7 @@ async function collectStatus() {
     siteUserId: state.siteUserId,
     lastError: state.lastError,
     notificationsDenied: !(await browserNotificationsGranted()),
+    browserBanners: state.browserBanners !== false,
     lastSnapshot: state.lastSnapshot,
     snapshotAt: state.snapshotAt,
     configError,
@@ -350,7 +352,7 @@ async function pollOnce() {
         const visible = filterEvents(events, await readNotifyPrefs());
         if (!visible.length) {
           console.info("Оповещение скрыто настройками");
-        } else if (await browserNotificationsGranted()) {
+        } else if (fresh.browserBanners !== false && (await browserNotificationsGranted())) {
           await notifyPositions(visible);
         } else {
           await markUnseen(visible.length);

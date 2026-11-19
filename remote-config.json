@@ -11,8 +11,8 @@
     "positionUrl": "https://api.moex.whitelist.capital/api/v1/user/position"
   },
   "update": {
-    "latestVersion": "1.4.2",
-    "notes": "С полуночи до 6:00 МСК позиции не запрашиваются: биржа закрыта.",
+    "latestVersion": "1.4.3",
+    "notes": "Уведомления браузера можно выключить в настройках: изменения тогда копятся на значке.",
     "downloadUrl": "https://github.com/artloop/wl_pos_extension/releases/latest"
   }
 }

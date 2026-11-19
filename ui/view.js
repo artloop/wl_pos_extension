@@ -72,9 +72,10 @@ const historyCount = document.querySelector("#history-count");
 let updateUrl = "";
 let notifyPrefs = {};
 let prefsWrite = Promise.resolve();
-let viewState = { shareWithServer: false, linked: false, pending: false };
+let viewState = { shareWithServer: false, linked: false, pending: false, browserBanners: true };
 let shareInput = null;
 let shareNote = null;
+let browserBannersInput = null;
 let layout = "compact";
 let historyOpen = false;
 let seenSnapshotAt = null;
@@ -126,11 +127,7 @@ function paintChrome(state) {
   backendNode.hidden = Boolean(state.backend);
   backendNode.textContent = state.backend ? "" : "Конфигурация стенда ещё не получена";
   linkStateNode.textContent = telegramLine(state);
-  bannerStateNode.textContent = state.notificationsDenied
-    ? "Баннеры браузера выключены, изменения копятся на значке."
-    : "Баннеры браузера включены.";
-  bannersButton.hidden = !state.notificationsDenied;
-  if (state.notificationsDenied) setTip(bannersButton, bannersTip, BANNERS_OFF);
+  paintBanners(state);
   linkButton.classList.remove("busy");
   setTip(linkButton, linkTip, linkTipText(state));
   linkButton.classList.toggle("on", Boolean(state.linked));
@@ -191,6 +188,23 @@ function togglePanel(button, panel) {
   }
 }
 
+function bannersChosen(state) {
+  return state.browserBanners !== false;
+}
+
+function paintBanners(state) {
+  const chosen = bannersChosen(state);
+  bannerStateNode.textContent = chosen
+    ? state.notificationsDenied
+      ? "Баннеры браузера выключены, изменения копятся на значке."
+      : "Баннеры браузера включены."
+    : "Уведомления браузера выключены в настройках. Изменения копятся на значке.";
+  const blocked = chosen && state.notificationsDenied;
+  bannersButton.hidden = !blocked;
+  if (blocked) setTip(bannersButton, bannersTip, BANNERS_OFF);
+  if (browserBannersInput) browserBannersInput.checked = chosen;
+}
+
 function syncShareControl() {
   if (!shareInput || !shareNote) return;
   const locked = Boolean(viewState.linked || viewState.pending || viewState.shareLocked);
@@ -218,8 +232,14 @@ async function saveShare(enabled) {
   if (result?.error) setAlert(result.error);
 }
 
+async function saveBrowserBanners(enabled) {
+  await chrome.storage.local.set({ browserBanners: enabled });
+  viewState = { ...viewState, browserBanners: enabled };
+  paintBanners(viewState);
+}
+
 async function buildSettings() {
-  const stored = await chrome.storage.local.get("notifyPrefs");
+  const stored = await chrome.storage.local.get(["notifyPrefs", "browserBanners"]);
   const prefs = stored.notifyPrefs && typeof stored.notifyPrefs === "object" ? stored.notifyPrefs : {};
   notifyPrefs = { ...prefs };
   const groups = [];
@@ -247,6 +267,19 @@ async function buildSettings() {
   shareNote.className = "privacy";
   settingsPanel.append(shareTitle, shareLabel, shareNote);
   syncShareControl();
+  const bannersLabel = document.createElement("label");
+  bannersLabel.className = "share-toggle";
+  browserBannersInput = document.createElement("input");
+  browserBannersInput.type = "checkbox";
+  browserBannersInput.checked = stored.browserBanners !== false;
+  browserBannersInput.addEventListener("change", () => saveBrowserBanners(browserBannersInput.checked));
+  const bannersText = document.createElement("span");
+  bannersText.textContent = "Уведомления браузера";
+  bannersLabel.append(browserBannersInput, bannersText);
+  const bannersNote = document.createElement("p");
+  bannersNote.className = "privacy";
+  bannersNote.textContent = "Без них изменения копятся на значке.";
+  settingsPanel.append(bannersLabel, bannersNote);
   for (const group of groups) {
     const title = document.createElement("p");
     title.className = "panel-title";
@@ -728,6 +761,10 @@ export async function bindPage(options = {}) {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (changes.notifyPrefs) buildSettings().then(() => paintHistory());
+    if (changes.browserBanners) {
+      viewState = { ...viewState, browserBanners: changes.browserBanners.newValue !== false };
+      paintBanners(viewState);
+    }
     if (changes.prefsConflict || changes.shareWithServer) {
       const conflict = changes.prefsConflict ? changes.prefsConflict.newValue : viewState.prefsConflict;
       const share = changes.shareWithServer ? changes.shareWithServer.newValue : viewState.shareWithServer;
