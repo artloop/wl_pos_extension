@@ -11,8 +11,8 @@
     "positionUrl": "https://api.moex.whitelist.capital/api/v1/user/position"
   },
   "update": {
-    "latestVersion": "1.4.3",
-    "notes": "Уведомления браузера можно выключить в настройках: изменения тогда копятся на значке.",
+    "latestVersion": "1.4.4",
+    "notes": "У заявок показано число лотов. Раскрытый список не закрывается при обновлении. На значке копится счётчик, если уведомления браузера выключены.",
     "downloadUrl": "https://github.com/artloop/wl_pos_extension/releases/latest"
   }
 }

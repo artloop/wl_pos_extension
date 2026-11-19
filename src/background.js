@@ -345,18 +345,17 @@ async function pollOnce() {
     } else {
       const text = renderMessages(events).join("\n\n");
       console.info(`Позиции изменились\n${text}`);
-      if (fresh.linked) {
+      const visible = filterEvents(events, await readNotifyPrefs());
+      const bannersOn = fresh.browserBanners !== false;
+      if (!visible.length) {
+        console.info("Оповещение скрыто настройками");
+      } else if (!fresh.linked && bannersOn && (await browserNotificationsGranted())) {
+        await notifyPositions(visible);
+      } else if (fresh.linked && bannersOn) {
         console.info("Системное уведомление выключено: кабинет привязан к Telegram");
         await clearBadge();
       } else {
-        const visible = filterEvents(events, await readNotifyPrefs());
-        if (!visible.length) {
-          console.info("Оповещение скрыто настройками");
-        } else if (fresh.browserBanners !== false && (await browserNotificationsGranted())) {
-          await notifyPositions(visible);
-        } else {
-          await markUnseen(visible.length);
-        }
+        await markUnseen(visible.length);
       }
     }
     await chrome.storage.local.set({
@@ -841,6 +840,7 @@ async function markUnseen(count) {
   const next = Math.min(999, (state.unseenChanges || 0) + count);
   await chrome.storage.local.set({ unseenChanges: next });
   await chrome.action.setBadgeBackgroundColor({ color: "#c24141" });
+  await chrome.action.setBadgeTextColor({ color: "#ffffff" });
   await chrome.action.setBadgeText({ text: next > 99 ? "99+" : String(next) });
   console.info(`Баннеры браузера выключены, на значке ${next}`);
 }

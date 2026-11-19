@@ -259,15 +259,9 @@ function orderChangeMark(before, after) {
   return { kind: "order", icons, tone: null, value, label };
 }
 
-function countLabel(item) {
+function lotLabel(item) {
   const count = finite(item?.orderCount);
-  if (count != null) return String(count);
-  return String(ordersOf(item).length);
-}
-
-function hidesOrders(item) {
-  const count = finite(item?.orderCount);
-  return count != null && count !== ordersOf(item).length;
+  return count == null ? null : String(count);
 }
 
 function orderDeltaRows(at, tool, before, after) {
@@ -290,18 +284,22 @@ function orderDeltaRows(at, tool, before, after) {
   for (const order of sortOrders(added)) {
     rows.push({ at, tool, marks: [orderMark("added", orderSide(order.direction), orderAmount(order))] });
   }
-  if ((hidesOrders(before) || hidesOrders(after)) && countLabel(before) !== countLabel(after)) {
-    const from = countLabel(before);
-    const to = countLabel(after);
-    const fromN = Number(from);
-    const toN = Number(to);
-    const tone = toN > fromN ? "up" : toN < fromN ? "down" : null;
-    const value = `всего заявок ${from} → ${to}`;
-    rows.push({
-      at,
-      tool,
-      marks: [{ kind: "order", icon: "list", tone, value, label: `Всего заявок ${from} → ${to}` }],
-    });
+  if (!removed.length && !added.length && !changed.length) {
+    const from = lotLabel(before);
+    const to = lotLabel(after);
+    if ((from != null || to != null) && from !== to) {
+      const fromText = from ?? "0";
+      const toText = to ?? "0";
+      const fromN = Number(fromText);
+      const toN = Number(toText);
+      const tone = toN > fromN ? "up" : toN < fromN ? "down" : null;
+      const value = `лотов ${fromText} → ${toText}`;
+      rows.push({
+        at,
+        tool,
+        marks: [{ kind: "order", icon: "list", tone, value, label: `Лотов ${fromText} → ${toText}` }],
+      });
+    }
   }
   return rows;
 }

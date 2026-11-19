@@ -79,6 +79,7 @@ let browserBannersInput = null;
 let layout = "compact";
 let historyOpen = false;
 let seenSnapshotAt = null;
+const openRows = new Set();
 let rawHistory = [];
 
 async function send(message) {
@@ -336,7 +337,7 @@ function renderPositions(snapshot, snapshotAt) {
     return;
   }
   if (layout === "desk") positionsNode.append(columnHead());
-  for (const [title, items] of groups) {
+  for (const [market, title, items] of groups) {
     const section = document.createElement("section");
     const heading = document.createElement("h2");
     heading.append(document.createTextNode(title));
@@ -346,7 +347,7 @@ function renderPositions(snapshot, snapshotAt) {
     heading.append(count);
     const rows = document.createElement("div");
     rows.className = "rows";
-    for (const item of items) rows.append(renderRow(item));
+    for (const item of items) rows.append(renderRow(market, item));
     section.append(heading, rows);
     positionsNode.append(section);
   }
@@ -384,27 +385,34 @@ function marketGroups(snapshot) {
   for (const [market, title] of MARKETS) {
     const items = Array.isArray(snapshot[market]) ? snapshot[market] : [];
     const visible = items.filter((item) => (layout === "desk" ? isDeskInstrument(item) : isActiveInstrument(item)));
-    if (visible.length) groups.push([title, visible]);
+    if (visible.length) groups.push([market, title, visible]);
   }
   return groups;
 }
 
-function renderRow(item) {
+function rowKey(market, tool) {
+  return `${market}\0${tool}`;
+}
+
+function renderRow(market, item) {
   const orders = sortOrders(ordersOf(item));
   const lots = lotsOf(item.position);
   const pnl = money(item.openedFinancialResult);
   const session = money(item.expectedFinancialResult);
   const commission = money(item.commission);
   const details = renderDetails(item, orders);
+  const key = rowKey(market, item.tool);
   const article = document.createElement("article");
   const short = lots != null && isShort(item);
   article.className = lots == null ? "row flat" : short ? "row short" : "row long";
+  if (!details) openRows.delete(key);
 
   const summary = document.createElement(details ? "button" : "div");
   summary.className = "summary";
+  const open = Boolean(details) && openRows.has(key);
   if (details) {
     summary.type = "button";
-    summary.setAttribute("aria-expanded", "false");
+    summary.setAttribute("aria-expanded", String(open));
   }
 
   const edge = document.createElement("span");
@@ -437,17 +445,22 @@ function renderRow(item) {
     cells.push(figure(session, "expectedFinancialResult"), figure(commission, "commission"), orderFigure(item, orders));
   }
   const chevron = details ? icon("chevron") : document.createElement("span");
-  if (details) chevron.classList.add("chevron");
+  if (details) {
+    chevron.classList.add("chevron");
+    if (open) chevron.classList.add("open");
+  }
   cells.push(chevron);
   summary.append(...cells);
   article.append(summary);
   if (details) {
-    details.hidden = true;
+    details.hidden = !open;
     summary.addEventListener("click", () => {
-      const open = details.hidden;
-      details.hidden = !open;
-      summary.setAttribute("aria-expanded", String(open));
-      chevron.classList.toggle("open", open);
+      const next = details.hidden;
+      details.hidden = !next;
+      summary.setAttribute("aria-expanded", String(next));
+      chevron.classList.toggle("open", next);
+      if (next) openRows.add(key);
+      else openRows.delete(key);
     });
     article.append(details);
   }
@@ -500,7 +513,7 @@ function renderDetails(item, orders) {
   const count = finite(item.orderCount);
   if (count != null && count > orders.length) {
     const note = document.createElement("p");
-    note.textContent = `Всего заявок ${count}`;
+    note.textContent = `Лотов ${count}`;
     box.append(note);
   }
   for (const order of orders) {

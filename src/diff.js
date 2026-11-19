@@ -145,7 +145,7 @@ function renderEvent(event) {
       header,
       `Позиция появилась: ${valueOf(event.item, "type")}, объём ${valueOf(event.item, "position")}`,
       `Результат за сессию: ${valueOf(event.item, "expectedFinancialResult")}`,
-      `Заявок: ${valueOf(event.item, "orderCount")}`,
+      `Лотов: ${valueOf(event.item, "orderCount")}`,
     ].join("\n");
   }
   if (event.kind === "closed") {
@@ -155,7 +155,7 @@ function renderEvent(event) {
   const lines = [header, `Изменилось: ${titles.join(", ")}`];
   for (const field of event.changes) {
     if (field === "orders") {
-      lines.push(`Заявок: ${valueOf(event.previous, "orderCount")} → ${valueOf(event.item, "orderCount")}`);
+      lines.push(`Лотов: ${valueOf(event.previous, "orderCount")} → ${valueOf(event.item, "orderCount")}`);
       continue;
     }
     lines.push(`${FIELD_TITLE[field] || field}: ${valueOf(event.previous, field)} → ${valueOf(event.item, field)}`);
