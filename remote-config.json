@@ -11,8 +11,8 @@
     "positionUrl": "https://api.moex.whitelist.capital/api/v1/user/position"
   },
   "update": {
-    "latestVersion": "1.4.1",
-    "notes": "Пока открыты popup или окно, один опрос обновляет позиции каждые 10 секунд. История хранит каждое изменение.",
+    "latestVersion": "1.4.2",
+    "notes": "С полуночи до 6:00 МСК позиции не запрашиваются: биржа закрыта.",
     "downloadUrl": "https://github.com/artloop/wl_pos_extension/releases/latest"
   }
 }

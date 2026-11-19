@@ -1,6 +1,7 @@
 import { accessOrigins, isNewer, joinUrl, loadRemoteConfig, originPattern } from "./config.js";
 import { openChannel, openSessionResponse, readSub, sealChannel, sealSessionRequest, sealToServer } from "./channel.js";
 import { diffPositions, renderMessages } from "./diff.js";
+import { marketClosed } from "./hours.js";
 import { rememberHistory, restoreHistory } from "./history.js";
 import { NOTIFY_OPTIONS, filterEvents } from "./notify-prefs.js";
 
@@ -323,6 +324,12 @@ async function pollOnce() {
       } catch (error) {
         syncError = error instanceof Error ? error.message : "Ошибка связи со стендом";
       }
+    }
+    if (marketClosed()) {
+      console.info("До 06:00 МСК позиции не запрашиваю: биржа закрыта");
+      if (syncError) await chrome.storage.local.set({ lastError: syncError });
+      else if (!share) await chrome.storage.local.set({ lastError: null });
+      return { ok: !syncError, error: syncError };
     }
     const state = await getState();
     const positions = await fetchPositions(config.whitelist.positionUrl, jwt);
