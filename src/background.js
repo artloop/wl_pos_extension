@@ -371,7 +371,13 @@ async function pollOnce() {
       }
     }
     if (!jwt) {
-      await chrome.storage.local.set({ lastError: syncError || null });
+      history = [];
+      await chrome.storage.local.set({
+        lastSnapshot: null,
+        snapshotAt: null,
+        [HISTORY_KEY]: [],
+        lastError: syncError || null,
+      });
     } else if (marketClosed()) {
       console.info("До 06:00 МСК позиции не запрашиваю: биржа закрыта");
       if (syncError) await chrome.storage.local.set({ lastError: syncError });

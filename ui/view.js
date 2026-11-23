@@ -477,7 +477,7 @@ function renderRobotRow(robot) {
 }
 
 function renderPositions(state) {
-  if (!state?.permissionGranted) {
+  if (!state?.permissionGranted || !state.cabinetOpen) {
     hidePositions();
     return;
   }
@@ -848,7 +848,7 @@ function applyWideTable() {
 async function paintBoards(state) {
   lastBoardState = state;
   await paintRobots(state);
-  if (state?.permissionGranted) {
+  if (state?.permissionGranted && state.cabinetOpen) {
     wideTable = robotsNode.hidden && document.documentElement.clientWidth >= 720;
     renderPositions(state);
   } else {
