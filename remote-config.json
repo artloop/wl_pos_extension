@@ -11,8 +11,8 @@
     "positionUrl": "https://api.moex.whitelist.capital/api/v1/user/position"
   },
   "update": {
-    "latestVersion": "1.5.1",
-    "notes": "Опрос позиций больше не зависит от доступа к AniScan. Он нужен только для роботов.",
+    "latestVersion": "1.5.2",
+    "notes": "Позиции и роботы открываются боковой панелью. Выход из кабинета стирает прошлый список.",
     "downloadUrl": "https://github.com/artloop/wl_pos_extension/releases/latest"
   }
 }
