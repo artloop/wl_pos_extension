@@ -1,5 +1,5 @@
 import { accessOrigins, aniscanOrigins, loadRemoteConfig, signInPrompts } from "../src/config.js";
-import { isActiveInstrument, isDeskInstrument } from "../src/diff.js";
+import { isDeskInstrument } from "../src/diff.js";
 import {
   finite,
   formatLots,
@@ -66,7 +66,6 @@ const infoButton = document.querySelector("#info");
 const grantButton = document.querySelector("#grant");
 const linkButton = document.querySelector("#link");
 const linkTip = document.querySelector("#link-tip");
-const openDeskButton = document.querySelector("#open-desk");
 const historyNode = document.querySelector("#history");
 const historyToggle = document.querySelector("#history-toggle");
 const historyList = document.querySelector("#history-list");
@@ -81,9 +80,11 @@ let shareNote = null;
 let browserBannersInput = null;
 let alertSoundInput = null;
 let tickerInput = null;
-let layout = "compact";
+let wideTable = false;
+let lastBoardState = null;
 let historyOpen = false;
 let seenSnapshotAt = null;
+let historyLoaded = false;
 const openRows = new Set();
 let rawHistory = [];
 
@@ -156,14 +157,8 @@ function paintChrome(state) {
     paintSignIn(null);
     return false;
   }
-  if (!state.permissionGranted) {
-    setAlert("");
-    linkButton.disabled = true;
-    paintSignIn(state);
-    return false;
-  }
-  linkButton.disabled = false;
-  setAlert(state.lastError || "");
+  linkButton.disabled = !state.permissionGranted;
+  setAlert(state.permissionGranted ? state.lastError || "" : "");
   paintSignIn(state);
   return true;
 }
@@ -330,7 +325,7 @@ async function buildSettings() {
   soundLabel.append(alertSoundInput, soundText);
   const soundNote = document.createElement("p");
   soundNote.className = "privacy";
-  soundNote.textContent = "Короткий тон, пока это окно в фокусе. Без него канал молчит.";
+  soundNote.textContent = "Короткий тон, пока панель в фокусе. Без него канал молчит.";
   const tickerTitle = document.createElement("p");
   tickerTitle.className = "panel-title";
   tickerTitle.textContent = "Инструменты";
@@ -391,7 +386,7 @@ function hideRobots() {
 
 async function paintRobots(state) {
   if (!robotsNode) return;
-  if (!state?.permissionGranted || !state.aniscanOpen) {
+  if (!state?.aniscanOpen) {
     hideRobots();
     return;
   }
@@ -481,26 +476,38 @@ function renderRobotRow(robot) {
   return article;
 }
 
-function renderPositions(snapshot, snapshotAt) {
-  if (!snapshot) {
+function renderPositions(state) {
+  if (!state?.permissionGranted) {
     hidePositions();
     return;
   }
   positionsNode.replaceChildren();
   positionsNode.hidden = false;
-  const meta = document.createElement("p");
-  meta.className = "positions-meta";
-  meta.textContent = snapshotAt ? `Обновлено в ${formatClock(snapshotAt)}` : "Обновлено";
-  positionsNode.append(meta);
-  const groups = marketGroups(snapshot);
-  if (!groups.length) {
+  positionsNode.classList.toggle("wide", wideTable);
+  const boardTitle = document.createElement("h2");
+  boardTitle.className = "board-title";
+  boardTitle.textContent = "Позиции";
+  positionsNode.append(boardTitle);
+  if (!state.lastSnapshot) {
     const note = document.createElement("p");
     note.className = "positions-note";
-    note.textContent = layout === "desk" ? "Нет позиций, заявок и комиссии" : "Нет позиций и заявок";
+    note.textContent = "Позиции ещё не загружены";
     positionsNode.append(note);
     return;
   }
-  if (layout === "desk") positionsNode.append(columnHead());
+  const meta = document.createElement("p");
+  meta.className = "positions-meta";
+  meta.textContent = state.snapshotAt ? `Обновлено в ${formatClock(state.snapshotAt)}` : "Обновлено";
+  positionsNode.append(meta);
+  const groups = marketGroups(state.lastSnapshot);
+  if (!groups.length) {
+    const note = document.createElement("p");
+    note.className = "positions-note";
+    note.textContent = "Нет позиций, заявок и комиссии";
+    positionsNode.append(note);
+    return;
+  }
+  if (wideTable) positionsNode.append(columnHead());
   for (const [market, title, items] of groups) {
     const section = document.createElement("section");
     const heading = document.createElement("h2");
@@ -548,7 +555,7 @@ function marketGroups(snapshot) {
   const groups = [];
   for (const [market, title] of MARKETS) {
     const items = Array.isArray(snapshot[market]) ? snapshot[market] : [];
-    const visible = items.filter((item) => (layout === "desk" ? isDeskInstrument(item) : isActiveInstrument(item)));
+    const visible = items.filter((item) => isDeskInstrument(item));
     if (visible.length) groups.push([market, title, visible]);
   }
   return groups;
@@ -593,19 +600,12 @@ function renderRow(market, item) {
     lotsText.textContent = formatLots(lots);
     qty.append(lotsText);
     qty.setAttribute("aria-label", `${short ? "Короткая" : "Длинная"} ${formatLots(lots)}`);
-  } else if (layout === "desk" && finite(item.position) === 0) {
+  } else if (finite(item.position) === 0) {
     qty.textContent = "0";
     qty.setAttribute("aria-label", "Объём 0");
-  } else if (layout !== "desk") {
-    const shownCount = orders.length > 0 ? orders.length : finite(item.orderCount);
-    qty.append(icon("list"));
-    const countText = document.createElement("span");
-    countText.textContent = shownCount == null ? "" : String(shownCount);
-    qty.append(countText);
-    if (shownCount != null) qty.setAttribute("aria-label", `Заявки ${shownCount}`);
   }
   const cells = [edge, name, qty, figure(pnl, "openedFinancialResult")];
-  if (layout === "desk") {
+  if (wideTable) {
     cells.push(figure(session, "expectedFinancialResult"), figure(commission, "commission"), orderFigure(item, orders));
   }
   const chevron = details ? icon("chevron") : document.createElement("span");
@@ -662,7 +662,7 @@ function orderFigure(item, orders) {
 function renderDetails(item, orders) {
   const box = document.createElement("div");
   box.className = "details";
-  if (layout !== "desk") {
+  if (!wideTable) {
     const expected = money(item.expectedFinancialResult);
     const commission = money(item.commission);
     const moneyBits = [];
@@ -775,12 +775,10 @@ function renderHistoryRow(entry) {
 }
 
 function paintHistory() {
-  if (layout !== "desk") return;
   renderHistory(visibleHistory(rawHistory, notifyPrefs), rawHistory.length);
 }
 
 async function loadHistory() {
-  if (layout !== "desk") return;
   const result = await send({ type: "getHistory" });
   rawHistory = Array.isArray(result?.history) ? result.history : [];
   paintHistory();
@@ -834,18 +832,46 @@ function watchPoll() {
   connect();
 }
 
+function syncHistory() {
+  if (!historyNode) return;
+  historyNode.hidden = positionsNode.hidden;
+}
+
+function applyWideTable() {
+  const next = Boolean(lastBoardState?.permissionGranted) && positionsNode && !positionsNode.hidden && robotsNode?.hidden && document.documentElement.clientWidth >= 720;
+  const changed = next !== wideTable;
+  wideTable = next;
+  if (positionsNode) positionsNode.classList.toggle("wide", next);
+  return changed;
+}
+
+async function paintBoards(state) {
+  lastBoardState = state;
+  await paintRobots(state);
+  if (state?.permissionGranted) {
+    wideTable = robotsNode.hidden && document.documentElement.clientWidth >= 720;
+    renderPositions(state);
+  } else {
+    wideTable = false;
+    hidePositions();
+  }
+  if (positionsNode) positionsNode.classList.toggle("wide", wideTable && !positionsNode.hidden);
+  syncHistory();
+}
+
 async function paintStored() {
   const state = await send({ type: "getStatus" });
-  const canShow = paintChrome(state);
-  if (!canShow) {
+  const ready = paintChrome(state);
+  if (!ready) {
     hidePositions();
     hideRobots();
+    syncHistory();
     return;
   }
-  renderPositions(state.lastSnapshot, state.snapshotAt);
-  await paintRobots(state);
-  if (state.snapshotAt !== seenSnapshotAt) {
+  await paintBoards(state);
+  if (!positionsNode.hidden && (state.snapshotAt !== seenSnapshotAt || !historyLoaded)) {
     seenSnapshotAt = state.snapshotAt;
+    historyLoaded = true;
     await loadHistory();
   }
 }
@@ -853,28 +879,31 @@ async function paintStored() {
 async function render() {
   privacyButton.classList.add("busy");
   const state = await send({ type: "getStatus" });
-  const canShow = paintChrome(state);
-  if (!canShow) {
+  const ready = paintChrome(state);
+  if (!ready) {
     hidePositions();
     hideRobots();
+    syncHistory();
     await send({ type: "seen" });
     return;
   }
-  renderPositions(state.lastSnapshot, state.snapshotAt);
-  await paintRobots(state);
+  await paintBoards(state);
   privacyButton.classList.add("busy");
   await send({ type: "poll" });
   const fresh = await send({ type: "getStatus" });
   if (!paintChrome(fresh)) {
     hidePositions();
     hideRobots();
+    syncHistory();
     await send({ type: "seen" });
     return;
   }
-  renderPositions(fresh.lastSnapshot, fresh.snapshotAt);
-  await paintRobots(fresh);
-  seenSnapshotAt = fresh.snapshotAt;
-  await loadHistory();
+  await paintBoards(fresh);
+  if (!positionsNode.hidden) {
+    seenSnapshotAt = fresh.snapshotAt;
+    historyLoaded = true;
+    await loadHistory();
+  }
   await send({ type: "seen" });
 }
 
@@ -907,8 +936,7 @@ async function resolveConflict(choice) {
   if (failure) setAlert(failure);
 }
 
-export async function bindPage(options = {}) {
-  layout = options.layout === "desk" ? "desk" : "compact";
+export async function bindPage() {
   settingsButton.addEventListener("click", () => togglePanel(settingsButton, settingsPanel));
   infoButton.addEventListener("click", () => togglePanel(infoButton, infoPanel));
   grantButton.addEventListener("click", async () => {
@@ -970,12 +998,6 @@ export async function bindPage(options = {}) {
   });
   prefsPush.addEventListener("click", () => resolveConflict("push"));
   prefsPull.addEventListener("click", () => resolveConflict("pull"));
-  if (openDeskButton) {
-    openDeskButton.addEventListener("click", async () => {
-      const result = await send({ type: "openDesk" });
-      if (!result?.error) window.close();
-    });
-  }
   if (historyToggle) {
     historyToggle.addEventListener("click", () => {
       historyOpen = !historyOpen;
@@ -1013,6 +1035,11 @@ export async function bindPage(options = {}) {
     }
   });
   watchPoll();
+  new ResizeObserver(() => {
+    if (!lastBoardState || !applyWideTable()) return;
+    renderPositions(lastBoardState);
+    syncHistory();
+  }).observe(document.documentElement);
   await buildSettings();
   await render();
 }

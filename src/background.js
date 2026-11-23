@@ -27,7 +27,6 @@ import {
 } from "./robot-feed.js";
 
 const ALARM = "positions";
-const DESK_KEY = "deskWindowId";
 const HISTORY_KEY = "positionHistory";
 const LIVE_PORT = "positions";
 const LIVE_POLL_MS = 10000;
@@ -104,12 +103,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((error) => sendResponse({ error: error instanceof Error ? error.message : "Не удалось изменить сохранение на сервере" }));
     return true;
   }
-  if (message?.type === "openDesk") {
-    openDesk()
-      .then(sendResponse)
-      .catch((error) => sendResponse({ error: error instanceof Error ? error.message : "Не удалось открыть окно" }));
-    return true;
-  }
   if (message?.type === "getHistory") {
     readHistory().then((entries) => sendResponse({ history: entries }));
     return true;
@@ -117,13 +110,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false;
 });
 
-chrome.windows.onRemoved.addListener((windowId) => {
-  chrome.storage.session.get(DESK_KEY).then((stored) => {
-    if (stored[DESK_KEY] === windowId) chrome.storage.session.remove(DESK_KEY);
-  });
-});
-
 chrome.alarms.create(ALARM, { periodInMinutes: 1 });
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error) => {
+  console.error("Боковая панель:", error instanceof Error ? error.message : "не открывается по значку");
+});
 loadHistory();
 reportPresence();
 bootRobots();
@@ -427,28 +417,6 @@ async function pollOnce() {
       console.error("Роботы:", error instanceof Error ? error.message : "Ошибка подключения");
     }
   }
-}
-
-async function openDesk() {
-  const stored = await chrome.storage.session.get(DESK_KEY);
-  const existing = stored[DESK_KEY];
-  if (existing != null) {
-    try {
-      await chrome.windows.update(existing, { focused: true });
-      return { ok: true };
-    } catch {
-      await chrome.storage.session.remove(DESK_KEY);
-    }
-  }
-  const created = await chrome.windows.create({
-    url: chrome.runtime.getURL("ui/desk.html"),
-    type: "popup",
-    width: 960,
-    height: 720,
-    focused: true,
-  });
-  if (created?.id != null) await chrome.storage.session.set({ [DESK_KEY]: created.id });
-  return { ok: true };
 }
 
 async function maybeNotifyUpdate(config) {
