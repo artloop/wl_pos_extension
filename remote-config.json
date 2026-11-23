@@ -11,8 +11,8 @@
     "positionUrl": "https://api.moex.whitelist.capital/api/v1/user/position"
   },
   "update": {
-    "latestVersion": "1.4.4",
-    "notes": "У заявок показано число лотов. Раскрытый список не закрывается при обновлении. На значке копится счётчик, если уведомления браузера выключены.",
+    "latestVersion": "1.5.1",
+    "notes": "Опрос позиций больше не зависит от доступа к AniScan. Он нужен только для роботов.",
     "downloadUrl": "https://github.com/artloop/wl_pos_extension/releases/latest"
   }
 }

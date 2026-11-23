@@ -1,9 +1,30 @@
-import { accessOrigins, isNewer, joinUrl, loadRemoteConfig, originPattern } from "./config.js";
+import { ANISCAN } from "./aniscan.js";
+import {
+  accessDeniedMessage,
+  accessOrigins,
+  aniscanOrigins,
+  cabinetUrl,
+  isNewer,
+  joinUrl,
+  loadRemoteConfig,
+  originPattern,
+} from "./config.js";
 import { openChannel, openSessionResponse, readSub, sealChannel, sealSessionRequest, sealToServer } from "./channel.js";
 import { diffPositions, renderMessages } from "./diff.js";
 import { marketClosed } from "./hours.js";
 import { rememberHistory, restoreHistory } from "./history.js";
 import { NOTIFY_OPTIONS, filterEvents } from "./notify-prefs.js";
+import {
+  decodeSockjs,
+  encodeSockjs,
+  parseStomp,
+  parseTickers,
+  robotBanner,
+  sockjsWebsocketUrl,
+  watchedRobots,
+  stompFrame,
+  takeRobotFrame,
+} from "./robot-feed.js";
 
 const ALARM = "positions";
 const DESK_KEY = "deskWindowId";
@@ -32,6 +53,9 @@ const EMPTY_STATE = {
   prefsKnown: false,
   shareWithServer: false,
   browserBanners: true,
+  alertSound: false,
+  cabinetOpen: false,
+  aniscanOpen: false,
 };
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -102,10 +126,15 @@ chrome.windows.onRemoved.addListener((windowId) => {
 chrome.alarms.create(ALARM, { periodInMinutes: 1 });
 loadHistory();
 reportPresence();
+bootRobots();
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== LIVE_PORT) return;
+  port.focused = true;
   viewers.add(port);
+  port.onMessage.addListener((message) => {
+    if (message?.type === "focus") port.focused = message.focused !== false;
+  });
   port.onDisconnect.addListener(() => {
     viewers.delete(port);
     if (viewers.size === 0 && liveTimer != null) {
@@ -210,7 +239,7 @@ async function setShare(enabled) {
     const config = await loadRemoteConfig();
     const granted = await chrome.permissions.contains({ origins: accessOrigins(config) });
     if (!granted) {
-      return { ok: false, shareWithServer: true, error: "Нужен доступ к кабинету и стенду. Откройте расширение." };
+      return { ok: false, shareWithServer: true, error: accessDeniedMessage({ cabinet: true }) };
     }
     const jwt = await readJwt(config.whitelist.positionUrl);
     if (!jwt) return { ok: false, shareWithServer: true, error: "Cookie jwt не найдена. Войдите на сайт." };
@@ -281,8 +310,19 @@ async function collectStatus() {
   const version = chrome.runtime.getManifest().version;
   const update = config && isNewer(config.update.latestVersion, version) ? config.update : null;
   let permissionGranted = false;
+  let aniscanPermission = false;
+  let robotsEnabled = false;
+  let accessError = "";
+  let cabinetOpen = false;
+  let aniscanOpen = false;
   if (config) {
-    permissionGranted = await chrome.permissions.contains({ origins: accessOrigins(config) });
+    const gaps = await permissionGaps(config);
+    permissionGranted = gaps.cabinetGranted;
+    aniscanPermission = gaps.aniscanGranted;
+    robotsEnabled = gaps.robotsEnabled;
+    accessError = accessDeniedMessage(gaps);
+    if (permissionGranted) cabinetOpen = Boolean(await readJwt(config.whitelist.positionUrl));
+    if (robotsEnabled && aniscanPermission) aniscanOpen = await aniscanSignedIn(ANISCAN.accountUrl);
   }
   return {
     linked: state.linked,
@@ -291,6 +331,14 @@ async function collectStatus() {
     lastError: state.lastError,
     notificationsDenied: !(await browserNotificationsGranted()),
     browserBanners: state.browserBanners !== false,
+    alertSound: state.alertSound === true,
+    cabinetOpen,
+    aniscanOpen,
+    aniscanPermission,
+    robotsEnabled,
+    accessError,
+    cabinetUrl: config ? cabinetUrl(config.whitelist.positionUrl) : "",
+    aniscanUrl: ANISCAN.siteUrl,
     lastSnapshot: state.lastSnapshot,
     snapshotAt: state.snapshotAt,
     configError,
@@ -306,69 +354,78 @@ async function collectStatus() {
 
 async function pollOnce() {
   let syncError = null;
+  let config = null;
   try {
-    const config = await loadRemoteConfig();
+    config = await loadRemoteConfig();
     await maybeNotifyUpdate(config);
     const share = await ensureShare();
-    const granted = await chrome.permissions.contains({ origins: accessOrigins(config) });
-    if (!granted) {
-      await chrome.storage.local.set({ lastError: "Нужен доступ к кабинету и стенду. Откройте расширение." });
+    const gaps = await permissionGaps(config);
+    if (gaps.cabinet) {
+      await chrome.storage.local.set({
+        lastError: accessDeniedMessage(gaps),
+        cabinetOpen: false,
+      });
       return { ok: false };
+    }
+    const prior = await chrome.storage.local.get("lastError");
+    if (typeof prior.lastError === "string" && prior.lastError.startsWith("Нужен доступ к ")) {
+      await chrome.storage.local.set({ lastError: null });
     }
     const jwt = await readJwt(config.whitelist.positionUrl);
-    if (!jwt) {
-      await chrome.storage.local.set({ lastError: "Cookie jwt не найдена. Войдите на сайт." });
-      return { ok: false };
-    }
-    if (share) {
+    await chrome.storage.local.set({ cabinetOpen: Boolean(jwt) });
+    if (jwt && share) {
       try {
         await syncBackend(config, jwt);
       } catch (error) {
         syncError = error instanceof Error ? error.message : "Ошибка связи со стендом";
       }
     }
-    if (marketClosed()) {
+    if (!jwt) {
+      await chrome.storage.local.set({ lastError: syncError || null });
+    } else if (marketClosed()) {
       console.info("До 06:00 МСК позиции не запрашиваю: биржа закрыта");
       if (syncError) await chrome.storage.local.set({ lastError: syncError });
       else if (!share) await chrome.storage.local.set({ lastError: null });
-      return { ok: !syncError, error: syncError };
-    }
-    const state = await getState();
-    const positions = await fetchPositions(config.whitelist.positionUrl, jwt);
-    const events = state.lastSnapshot ? diffPositions(state.lastSnapshot, positions) : [];
-    if (state.lastSnapshot && events.length) await appendHistory(events, Date.now());
-    const fresh = await getState();
-    if (!state.lastSnapshot) {
-      console.info("Позиции: первая загрузка, уведомление не отправляю");
-    } else if (!events.length) {
-      console.info("Позиции без изменений");
     } else {
-      const text = renderMessages(events).join("\n\n");
-      console.info(`Позиции изменились\n${text}`);
-      const visible = filterEvents(events, await readNotifyPrefs());
-      const bannersOn = fresh.browserBanners !== false;
-      if (!visible.length) {
-        console.info("Оповещение скрыто настройками");
-      } else if (!fresh.linked && bannersOn && (await browserNotificationsGranted())) {
-        await notifyPositions(visible);
-      } else if (fresh.linked && bannersOn) {
-        console.info("Системное уведомление выключено: кабинет привязан к Telegram");
-        await clearBadge();
+      const state = await getState();
+      const positions = await fetchPositions(config.whitelist.positionUrl, jwt);
+      const events = state.lastSnapshot ? diffPositions(state.lastSnapshot, positions) : [];
+      if (state.lastSnapshot && events.length) await appendHistory(events, Date.now());
+      const fresh = await getState();
+      if (!state.lastSnapshot) {
+        console.info("Позиции: первая загрузка, уведомление не отправляю");
+      } else if (!events.length) {
+        console.info("Позиции без изменений");
       } else {
-        await markUnseen(visible.length);
+        const visible = filterEvents(events, await readNotifyPrefs());
+        const text = renderMessages(visible).join("\n\n");
+        console.info(`Позиции изменились\n${renderMessages(events).join("\n\n")}`);
+        if (!visible.length) console.info("Оповещение скрыто настройками");
+        else {
+          await presentEvents([{ title: "Позиции Whitelist", message: text }], {
+            linked: Boolean(fresh.linked),
+            count: visible.length,
+          });
+        }
       }
+      await chrome.storage.local.set({
+        lastSnapshot: positions,
+        snapshotAt: Date.now(),
+        ...(syncError ? { lastError: syncError } : share ? {} : { lastError: null }),
+      });
     }
-    await chrome.storage.local.set({
-      lastSnapshot: positions,
-      snapshotAt: Date.now(),
-      ...(syncError ? { lastError: syncError } : share ? {} : { lastError: null }),
-    });
     return { ok: !syncError, error: syncError };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Ошибка опроса";
     console.error("Опрос позиций:", message);
     await chrome.storage.local.set({ lastError: syncError || message });
     return { ok: false, error: message };
+  } finally {
+    try {
+      await ensureRobots();
+    } catch (error) {
+      console.error("Роботы:", error instanceof Error ? error.message : "Ошибка подключения");
+    }
   }
 }
 
@@ -850,13 +907,263 @@ async function clearBadge() {
   await chrome.action.setBadgeText({ text: "" });
 }
 
-async function notifyPositions(events) {
-  const text = renderMessages(events).join("\n\n");
-  await chrome.notifications.create(`wl-pos-${Date.now()}`, {
-    type: "basic",
-    iconUrl: chrome.runtime.getURL("icons/icon128.png"),
-    title: "Позиции Whitelist",
-    message: text.slice(0, 500) || "Позиции изменились",
+function viewersFocused() {
+  for (const port of viewers) {
+    if (port.focused !== false) return true;
+  }
+  return false;
+}
+
+function playTone() {
+  for (const port of viewers) {
+    if (port.focused === false) continue;
+    try {
+      port.postMessage({ type: "playSound" });
+    } catch {
+      /* страница уже закрыта */
+    }
+  }
+}
+
+async function presentEvents(items, { linked, count }) {
+  if (!count || !items?.length) return;
+  const state = await getState();
+  const soundOn = state.alertSound === true;
+  const bannersOn = state.browserBanners !== false;
+  const focused = viewersFocused();
+  const permitted = await browserNotificationsGranted();
+  if (focused && soundOn) playTone();
+  if (!focused && linked && bannersOn) {
+    console.info("Системное уведомление выключено: кабинет привязан к Telegram");
+    await clearBadge();
+    return;
+  }
+  if (!focused && bannersOn && permitted) {
+    for (const item of items) {
+      await chrome.notifications.create(`wl-${Date.now()}-${Math.random().toString(16).slice(2)}`, {
+        type: "basic",
+        iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+        title: String(item.title || "Оповещение").slice(0, 120),
+        message: String(item.message || item.title || "").slice(0, 500),
+      });
+    }
+    return;
+  }
+  if (!bannersOn || !permitted) await markUnseen(count);
+}
+
+let robotConn = null;
+let robotState = { ready: false, known: {} };
+let robotWanted = "";
+let robotTickers = new Set();
+let robotEpoch = 0;
+let publishedRobots = "";
+let robotWrite = Promise.resolve();
+let robotLogKey = "";
+
+function robotLog(key, line) {
+  if (key === robotLogKey) return;
+  robotLogKey = key;
+  console.info(`Роботы: ${line}`);
+}
+
+chrome.storage.local.get("robotTickers").then((stored) => {
+  robotTickers = parseTickers(stored.robotTickers);
+});
+
+async function currentRobotTickers() {
+  const stored = await chrome.storage.local.get("robotTickers");
+  robotTickers = parseTickers(stored.robotTickers);
+  return robotTickers;
+}
+
+async function permissionGaps(config) {
+  const tickers = await currentRobotTickers();
+  const cabinetGranted = await chrome.permissions.contains({ origins: accessOrigins(config) });
+  const aniscanGranted = await chrome.permissions.contains({ origins: aniscanOrigins() });
+  return {
+    cabinet: !cabinetGranted,
+    aniscan: tickers.size > 0 && !aniscanGranted,
+    robotsEnabled: tickers.size > 0,
+    cabinetGranted,
+    aniscanGranted,
+  };
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.robotTickers) {
+    robotTickers = parseTickers(changes.robotTickers.newValue);
+    if (robotState.ready) void publishRobotList(robotEpoch);
+  }
+});
+
+function stopRobots() {
+  robotEpoch += 1;
+  robotWanted = "";
+  const socket = robotConn?.socket;
+  robotConn = null;
+  robotState = { ready: false, known: {} };
+  queueRobotList(robotEpoch, null);
+  if (socket && socket.readyState < WebSocket.CLOSING) socket.close();
+}
+
+function queueRobotList(epoch, list) {
+  const encoded = JSON.stringify(list);
+  robotWrite = robotWrite
+    .then(async () => {
+      if (epoch !== robotEpoch || encoded === publishedRobots) return;
+      publishedRobots = encoded;
+      await chrome.storage.local.set({ robotList: list });
+    })
+    .catch(() => {});
+}
+
+function publishRobotList(epoch) {
+  if (epoch !== robotEpoch || !robotState.ready) return;
+  queueRobotList(epoch, watchedRobots(robotState.known, robotTickers));
+}
+
+async function aniscanAccountStatus(accountUrl) {
+  try {
+    const response = await fetch(accountUrl, { credentials: "include", cache: "no-store" });
+    return response.status;
+  } catch {
+    return 0;
+  }
+}
+
+async function aniscanSignedIn(accountUrl) {
+  return (await aniscanAccountStatus(accountUrl)) === 200;
+}
+
+async function ensureRobots() {
+  const tickers = await currentRobotTickers();
+  if (!tickers.size) {
+    if (robotConn || robotWanted) stopRobots();
+    return;
+  }
+  const granted = await chrome.permissions.contains({ origins: aniscanOrigins() });
+  if (!granted) {
+    robotLog("no-permission", "нет доступа к AniScan. Откройте расширение и разрешите доступ");
+    stopRobots();
+    await chrome.storage.local.set({ aniscanOpen: false });
+    return;
+  }
+  const status = await aniscanAccountStatus(ANISCAN.accountUrl);
+  const open = status === 200;
+  await chrome.storage.local.set({ aniscanOpen: open });
+  if (!open) {
+    robotLog(`account-${status}`, status ? `вход не подтверждён, статус ${status}` : "проверка входа не удалась");
+    stopRobots();
+    return;
+  }
+  const key = `${ANISCAN.socketUrl} ${ANISCAN.notificationsDestination}`;
+  const live = robotConn?.socket;
+  if (robotWanted === key && live && (live.readyState === WebSocket.OPEN || live.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+  const host = new URL(ANISCAN.socketUrl).host;
+  robotLog("connecting", `подключаюсь к ${host}, тикеров ${robotTickers.size}`);
+  startRobots(ANISCAN, key);
+}
+
+function startRobots(aniscan, key) {
+  stopRobots();
+  robotWanted = key;
+  const socket = new WebSocket(sockjsWebsocketUrl(aniscan.socketUrl));
+  const conn = { socket, destination: aniscan.notificationsDestination };
+  robotConn = conn;
+  socket.onmessage = (event) => {
+    if (robotConn !== conn) return;
+    onRobotSocket(conn, event.data);
+  };
+  socket.onclose = (event) => {
+    if (robotConn !== conn) return;
+    robotConn = null;
+    robotState = { ready: false, known: {} };
+    const code = event?.code ?? "";
+    robotLog(`close-${code}`, `сокет закрыт, код ${code}. Повтор через 5 секунд`);
+    setTimeout(() => {
+      if (robotWanted !== key || robotConn) return;
+      robotLog("connecting", `подключаюсь снова, тикеров ${robotTickers.size}`);
+      startRobots(aniscan, key);
+    }, 5000);
+  };
+  socket.onerror = () => {
+    console.error("Роботы: ошибка сокета");
+  };
+}
+
+function onRobotSocket(conn, data) {
+  let frames = [];
+  if (typeof data !== "string") {
+    robotLog("binary", "кадр сокета не текстовый");
+    return;
+  }
+  try {
+    frames = decodeSockjs(data);
+  } catch {
+    robotLog("bad-frame", "кадр сокета не разобран");
+    return;
+  }
+  for (const frame of frames) {
+    if (frame.type === "open") {
+      console.info("Роботы: сокет открыт, отправляю CONNECT");
+      conn.socket.send(
+        encodeSockjs(stompFrame("CONNECT", { "accept-version": "1.2,1.1,1.0", "heart-beat": "0,0" }))
+      );
+      continue;
+    }
+    if (frame.type !== "message") continue;
+    const stomp = parseStomp(frame.body);
+    if (stomp.command === "CONNECTED") {
+      console.info(`Роботы: сервер принял соединение, подписка ${conn.destination}`);
+      conn.socket.send(encodeSockjs(stompFrame("SUBSCRIBE", { id: "robots", destination: conn.destination })));
+      continue;
+    }
+    if (stomp.command === "MESSAGE") void handleRobotMessage(stomp.body);
+    else if (stomp.command === "ERROR") console.error("Роботы: сервер прислал ERROR");
+    else if (stomp.command) robotLog(`stomp-${stomp.command}`, `кадр ${stomp.command}`);
+  }
+}
+
+async function handleRobotMessage(body) {
+  const epoch = robotEpoch;
+  let payload = null;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    robotLog("bad-body", "тело уведомления не разобрано");
+    return;
+  }
+  const incoming = Array.isArray(payload?.notifications) ? payload.notifications.length : 0;
+  const wasReady = Boolean(robotState.ready);
+  const quiet = marketClosed();
+  const result = takeRobotFrame(robotState, payload?.notifications, robotTickers, quiet);
+  if (epoch !== robotEpoch) return;
+  robotState = { ready: result.ready, known: result.known };
+  publishRobotList(epoch);
+  const watched = watchedRobots(result.known, robotTickers).length;
+  if (!wasReady) {
+    console.info(
+      `Роботы: первый кадр, событий ${incoming}, в списке ${watched}, тикеров ${robotTickers.size}${quiet ? ", тихий час" : ""}`
+    );
+  } else if (result.alerts.length) {
+    console.info(`Роботы: новых событий ${result.alerts.length}, в списке ${watched}`);
+  }
+  if (!result.alerts.length) return;
+  await presentEvents(
+    result.alerts.map((alert) => ({
+      title: alert.kind === "gone" ? `${alert.title}: робот ушёл` : alert.title,
+      message: robotBanner(alert),
+    })),
+    { linked: false, count: result.alerts.length }
+  );
+}
+
+function bootRobots() {
+  ensureRobots().catch((error) => {
+    console.error("Роботы:", error instanceof Error ? error.message : "Ошибка подключения");
   });
 }
 

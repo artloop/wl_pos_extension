@@ -1,3 +1,5 @@
+import { ANISCAN } from "./aniscan.js";
+
 export const CONFIG_URL =
   "https://raw.githubusercontent.com/artloop/wl_pos_extension/main/remote-config.json";
 
@@ -46,6 +48,17 @@ export function originPattern(url) {
   return `${parsed.protocol}//${parsed.host}/*`;
 }
 
+export function cabinetUrl(positionUrl) {
+  const parsed = new URL(positionUrl);
+  const labels = parsed.hostname.split(".");
+  const host = labels.length > 2 ? labels.slice(1).join(".") : parsed.hostname;
+  return `${parsed.protocol}//${host}/`;
+}
+
+export function aniscanOrigins() {
+  return [...new Set([ANISCAN.siteUrl, ANISCAN.accountUrl, ANISCAN.socketUrl].map(originPattern))];
+}
+
 export function accessOrigins(config) {
   const origins = new Set([
     originPattern(config.backend.baseUrl),
@@ -56,6 +69,29 @@ export function accessOrigins(config) {
     origins.add(`https://${host.slice(1).join(".")}/*`);
   }
   return [...origins];
+}
+
+export function accessDeniedMessage({ cabinet = false, aniscan = false } = {}) {
+  const names = [];
+  if (cabinet) names.push("кабинету", "стенду");
+  if (aniscan) names.push("AniScan");
+  if (!names.length) return "";
+  if (names.length === 1) return `Нужен доступ к ${names[0]}. Откройте расширение.`;
+  const tail = names.pop();
+  return `Нужен доступ к ${names.join(", ")} и ${tail}. Откройте расширение.`;
+}
+
+export function signInPrompts(state) {
+  if (!state) return [];
+  const lines = [];
+  if (state.accessError) lines.push({ text: state.accessError });
+  if (state.permissionGranted && !state.cabinetOpen && state.cabinetUrl) {
+    lines.push({ text: "Чтобы видеть позиции, войдите в кабинет.", href: state.cabinetUrl });
+  }
+  if (state.robotsEnabled && state.aniscanPermission && state.aniscanUrl && !state.aniscanOpen) {
+    lines.push({ text: "Чтобы следить за роботами, войдите в AniScan.", href: state.aniscanUrl });
+  }
+  return lines;
 }
 
 export function isNewer(latest, current) {

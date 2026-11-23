@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "WL Position Checker",
-  "version": "1.4.4",
-  "description": "Следит за позициями кабинета Whitelist и переносит оповещения в Telegram.",
+  "version": "1.5.1",
+  "description": "Следит за позициями кабинета Whitelist, роботами AniScan и переносит оповещения в Telegram.",
   "permissions": ["cookies", "notifications", "alarms", "storage", "declarativeNetRequestWithHostAccess"],
   "host_permissions": ["https://raw.githubusercontent.com/*"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],

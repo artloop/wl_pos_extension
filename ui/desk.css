@@ -14,7 +14,8 @@ body.desk {
   overflow: auto;
 }
 
-body.desk #positions {
+body.desk #positions,
+body.desk #robots {
   max-height: none;
   overflow: visible;
 }

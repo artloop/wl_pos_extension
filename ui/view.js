@@ -1,4 +1,4 @@
-import { accessOrigins, loadRemoteConfig } from "../src/config.js";
+import { accessOrigins, aniscanOrigins, loadRemoteConfig, signInPrompts } from "../src/config.js";
 import { isActiveInstrument, isDeskInstrument } from "../src/diff.js";
 import {
   finite,
@@ -13,6 +13,7 @@ import {
   visibleHistory,
 } from "../src/history.js";
 import { NOTIFY_OPTIONS } from "../src/notify-prefs.js";
+import { marketWord, parseTickers, sideWord } from "../src/robot-feed.js";
 
 const MARKETS = [
   ["stock", "Акции"],
@@ -53,6 +54,8 @@ const bannerStateNode = document.querySelector("#banner-state");
 const updateButton = document.querySelector("#update");
 const updateTip = document.querySelector("#update-tip");
 const positionsNode = document.querySelector("#positions");
+const robotsNode = document.querySelector("#robots");
+const signInNode = document.querySelector("#sign-in");
 const settingsPanel = document.querySelector("#settings-panel");
 const conflictPanel = document.querySelector("#prefs-conflict");
 const prefsPush = document.querySelector("#prefs-push");
@@ -76,6 +79,8 @@ let viewState = { shareWithServer: false, linked: false, pending: false, browser
 let shareInput = null;
 let shareNote = null;
 let browserBannersInput = null;
+let alertSoundInput = null;
+let tickerInput = null;
 let layout = "compact";
 let historyOpen = false;
 let seenSnapshotAt = null;
@@ -141,23 +146,54 @@ function paintChrome(state) {
     updateButton.hidden = true;
     updateUrl = "";
   }
-  grantButton.hidden = !state.backend || state.permissionGranted;
+  grantButton.hidden = !state.backend || !state.accessError;
   grantButton.disabled = false;
   conflictPanel.hidden =
     !state.prefsConflict || !state.shareWithServer || !state.permissionGranted || Boolean(state.configError);
   if (state.configError) {
     setAlert(state.configError);
     linkButton.disabled = true;
+    paintSignIn(null);
     return false;
   }
   if (!state.permissionGranted) {
     setAlert("");
     linkButton.disabled = true;
+    paintSignIn(state);
     return false;
   }
   linkButton.disabled = false;
   setAlert(state.lastError || "");
+  paintSignIn(state);
   return true;
+}
+
+function paintSignIn(state) {
+  if (!signInNode) return;
+  signInNode.replaceChildren();
+  if (!state) {
+    signInNode.hidden = true;
+    return;
+  }
+  const lines = signInPrompts(state);
+  signInNode.hidden = lines.length === 0;
+  for (const line of lines) {
+    const note = document.createElement("p");
+    note.className = "sign-in";
+    if (!line.href) {
+      note.textContent = line.text;
+      signInNode.append(note);
+      continue;
+    }
+    note.append(document.createTextNode(`${line.text} `));
+    const link = document.createElement("a");
+    link.href = line.href;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = "Открыть сайт";
+    note.append(link);
+    signInNode.append(note);
+  }
 }
 
 function telegramLine(state) {
@@ -240,7 +276,7 @@ async function saveBrowserBanners(enabled) {
 }
 
 async function buildSettings() {
-  const stored = await chrome.storage.local.get(["notifyPrefs", "browserBanners"]);
+  const stored = await chrome.storage.local.get(["notifyPrefs", "browserBanners", "alertSound", "robotTickers"]);
   const prefs = stored.notifyPrefs && typeof stored.notifyPrefs === "object" ? stored.notifyPrefs : {};
   notifyPrefs = { ...prefs };
   const groups = [];
@@ -281,6 +317,36 @@ async function buildSettings() {
   bannersNote.className = "privacy";
   bannersNote.textContent = "Без них изменения копятся на значке.";
   settingsPanel.append(bannersLabel, bannersNote);
+  const soundLabel = document.createElement("label");
+  soundLabel.className = "share-toggle";
+  alertSoundInput = document.createElement("input");
+  alertSoundInput.type = "checkbox";
+  alertSoundInput.checked = stored.alertSound === true;
+  alertSoundInput.addEventListener("change", () => {
+    chrome.storage.local.set({ alertSound: alertSoundInput.checked });
+  });
+  const soundText = document.createElement("span");
+  soundText.textContent = "Звук";
+  soundLabel.append(alertSoundInput, soundText);
+  const soundNote = document.createElement("p");
+  soundNote.className = "privacy";
+  soundNote.textContent = "Короткий тон, пока это окно в фокусе. Без него канал молчит.";
+  const tickerTitle = document.createElement("p");
+  tickerTitle.className = "panel-title";
+  tickerTitle.textContent = "Инструменты";
+  tickerInput = document.createElement("input");
+  tickerInput.className = "ticker-field";
+  tickerInput.type = "text";
+  tickerInput.spellcheck = false;
+  tickerInput.placeholder = "SBER, GAZP";
+  tickerInput.value = typeof stored.robotTickers === "string" ? stored.robotTickers : "";
+  const saveTickers = () => chrome.storage.local.set({ robotTickers: tickerInput.value });
+  tickerInput.addEventListener("change", saveTickers);
+  tickerInput.addEventListener("input", saveTickers);
+  const tickerNote = document.createElement("p");
+  tickerNote.className = "privacy";
+  tickerNote.textContent = "Текущие роботы и оповещения AniScan по этим тикерам. Пустое поле — без списка и без оповещений.";
+  settingsPanel.append(soundLabel, soundNote, tickerTitle, tickerInput, tickerNote);
   for (const group of groups) {
     const title = document.createElement("p");
     title.className = "panel-title";
@@ -315,6 +381,104 @@ function savePref(id, enabled) {
 function hidePositions() {
   positionsNode.hidden = true;
   positionsNode.replaceChildren();
+}
+
+function hideRobots() {
+  if (!robotsNode) return;
+  robotsNode.hidden = true;
+  robotsNode.replaceChildren();
+}
+
+async function paintRobots(state) {
+  if (!robotsNode) return;
+  if (!state?.permissionGranted || !state.aniscanOpen) {
+    hideRobots();
+    return;
+  }
+  const stored = await chrome.storage.local.get(["robotTickers", "robotList"]);
+  if (!parseTickers(stored.robotTickers).size) {
+    hideRobots();
+    return;
+  }
+  const list = Array.isArray(stored.robotList) ? stored.robotList : null;
+  robotsNode.replaceChildren();
+  robotsNode.hidden = false;
+  const heading = document.createElement("h2");
+  heading.append(document.createTextNode("Роботы"));
+  const count = document.createElement("span");
+  count.className = "count";
+  count.textContent = list ? String(list.length) : "…";
+  heading.append(count);
+  robotsNode.append(heading);
+  if (!list) {
+    const note = document.createElement("p");
+    note.className = "positions-note";
+    note.textContent = "Список роботов обновляется";
+    robotsNode.append(note);
+    return;
+  }
+  if (!list.length) {
+    const note = document.createElement("p");
+    note.className = "positions-note";
+    note.textContent = "По выбранным инструментам роботов сейчас нет";
+    robotsNode.append(note);
+    return;
+  }
+  let market = "";
+  let rows = null;
+  for (const robot of list) {
+    const name = robotMarketTitle(robot.market);
+    if (name !== market) {
+      market = name;
+      const section = document.createElement("section");
+      const title = document.createElement("h2");
+      title.textContent = name;
+      rows = document.createElement("div");
+      rows.className = "rows";
+      section.append(title, rows);
+      robotsNode.append(section);
+    }
+    rows.append(renderRobotRow(robot));
+  }
+}
+
+function robotMarketTitle(market) {
+  const word = marketWord(market);
+  if (!word) return "Другие";
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+function renderRobotRow(robot) {
+  const sell = robot.side === "SELL";
+  const buy = robot.side === "BUY";
+  const article = document.createElement("article");
+  article.className = sell ? "row short" : buy ? "row long" : "row flat";
+  const summary = document.createElement("div");
+  summary.className = "summary";
+  const edge = document.createElement("span");
+  edge.className = "edge";
+  const name = document.createElement("strong");
+  name.className = "tool";
+  name.textContent = robot.title || "—";
+  const side = document.createElement("span");
+  side.className = sell ? "qty down" : buy ? "qty up" : "qty";
+  const word = sideWord(robot.side);
+  if (word) {
+    side.append(icon(sell ? "down" : "up"));
+    const label = document.createElement("span");
+    label.textContent = word;
+    side.append(label);
+    side.setAttribute("aria-label", word);
+  }
+  summary.append(edge, name, side);
+  article.append(summary);
+  if (robot.text) {
+    const detail = document.createElement("p");
+    detail.className = "robot-text";
+    detail.textContent = robot.text;
+    article.append(detail);
+  }
+  return article;
 }
 
 function renderPositions(snapshot, snapshotAt) {
@@ -622,15 +786,48 @@ async function loadHistory() {
   paintHistory();
 }
 
+function playSound() {
+  const context = new AudioContext();
+  const tone = context.createOscillator();
+  const level = context.createGain();
+  tone.frequency.value = 880;
+  level.gain.setValueAtTime(0.0001, context.currentTime);
+  level.gain.exponentialRampToValueAtTime(0.05, context.currentTime + 0.02);
+  level.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
+  tone.connect(level);
+  level.connect(context.destination);
+  tone.start();
+  tone.stop(context.currentTime + 0.2);
+  tone.onended = () => context.close();
+}
+
 function watchPoll() {
   let closed = false;
+  let port = null;
+  const reportFocus = () => {
+    if (!port) return;
+    const focused = document.visibilityState === "visible" && document.hasFocus();
+    try {
+      port.postMessage({ type: "focus", focused });
+    } catch {
+      /* порт уже закрыт */
+    }
+  };
   const connect = () => {
     if (closed) return;
-    const port = chrome.runtime.connect({ name: "positions" });
+    port = chrome.runtime.connect({ name: "positions" });
+    port.onMessage.addListener((message) => {
+      if (message?.type === "playSound") playSound();
+    });
     port.onDisconnect.addListener(() => {
+      port = null;
       if (!closed) setTimeout(connect, 200);
     });
+    reportFocus();
   };
+  window.addEventListener("focus", reportFocus);
+  window.addEventListener("blur", reportFocus);
+  document.addEventListener("visibilitychange", reportFocus);
   window.addEventListener("pagehide", () => {
     closed = true;
   });
@@ -642,9 +839,11 @@ async function paintStored() {
   const canShow = paintChrome(state);
   if (!canShow) {
     hidePositions();
+    hideRobots();
     return;
   }
   renderPositions(state.lastSnapshot, state.snapshotAt);
+  await paintRobots(state);
   if (state.snapshotAt !== seenSnapshotAt) {
     seenSnapshotAt = state.snapshotAt;
     await loadHistory();
@@ -657,19 +856,23 @@ async function render() {
   const canShow = paintChrome(state);
   if (!canShow) {
     hidePositions();
+    hideRobots();
     await send({ type: "seen" });
     return;
   }
   renderPositions(state.lastSnapshot, state.snapshotAt);
+  await paintRobots(state);
   privacyButton.classList.add("busy");
   await send({ type: "poll" });
   const fresh = await send({ type: "getStatus" });
   if (!paintChrome(fresh)) {
     hidePositions();
+    hideRobots();
     await send({ type: "seen" });
     return;
   }
   renderPositions(fresh.lastSnapshot, fresh.snapshotAt);
+  await paintRobots(fresh);
   seenSnapshotAt = fresh.snapshotAt;
   await loadHistory();
   await send({ type: "seen" });
@@ -713,8 +916,18 @@ export async function bindPage(options = {}) {
     let failure = "";
     try {
       const config = await loadRemoteConfig();
-      const granted = await chrome.permissions.request({ origins: accessOrigins(config) });
-      if (!granted) failure = "Доступ не выдан.";
+      const origins = [];
+      const core = accessOrigins(config);
+      if (!(await chrome.permissions.contains({ origins: core }))) origins.push(...core);
+      const stored = await chrome.storage.local.get("robotTickers");
+      if (parseTickers(stored.robotTickers).size) {
+        const robots = aniscanOrigins();
+        if (!(await chrome.permissions.contains({ origins: robots }))) origins.push(...robots);
+      }
+      if (origins.length) {
+        const granted = await chrome.permissions.request({ origins });
+        if (!granted) failure = "Доступ не выдан.";
+      }
     } catch (error) {
       failure = error instanceof Error ? error.message : "Не удалось запросить доступ";
     }
@@ -783,7 +996,21 @@ export async function bindPage(options = {}) {
       const share = changes.shareWithServer ? changes.shareWithServer.newValue : viewState.shareWithServer;
       conflictPanel.hidden = !conflict || !share;
     }
-    if (changes.lastSnapshot || changes.snapshotAt || changes.lastError) paintStored();
+    if (changes.alertSound && alertSoundInput) alertSoundInput.checked = changes.alertSound.newValue === true;
+    if (changes.robotTickers && tickerInput && document.activeElement !== tickerInput) {
+      tickerInput.value = typeof changes.robotTickers.newValue === "string" ? changes.robotTickers.newValue : "";
+    }
+    if (
+      changes.lastSnapshot ||
+      changes.snapshotAt ||
+      changes.lastError ||
+      changes.cabinetOpen ||
+      changes.aniscanOpen ||
+      changes.robotList ||
+      changes.robotTickers
+    ) {
+      paintStored();
+    }
   });
   watchPoll();
   await buildSettings();

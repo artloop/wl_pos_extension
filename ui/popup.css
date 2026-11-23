@@ -320,9 +320,26 @@ h1 {
 
 #positions .details p,
 .positions-meta,
-.positions-note {
+.positions-note,
+.sign-in {
   margin: 4px 0 0;
   color: #c5d0e0;
+}
+
+.sign-in a {
+  color: #8eb6ff;
+}
+
+.ticker-field {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 4px 0;
+  padding: 8px 10px;
+  border: 1px solid #314056;
+  border-radius: 8px;
+  background: #0c1016;
+  color: #f4f7fb;
+  font: inherit;
 }
 
 #positions .order {
@@ -349,6 +366,94 @@ h1 {
 
 #positions .chevron.open {
   transform: rotate(180deg);
+}
+
+#robots {
+  max-height: 220px;
+  margin: 12px 0 0;
+  overflow-y: auto;
+}
+
+#robots > h2,
+#robots section h2 {
+  margin: 12px 0 2px;
+  color: #c5d0e0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#robots > h2 {
+  margin-top: 0;
+}
+
+#robots h2 .count {
+  margin-left: 6px;
+}
+
+#robots .row {
+  border-bottom: 1px solid #314056;
+}
+
+#robots .summary {
+  display: grid;
+  grid-template-columns: 3px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 2px;
+}
+
+#robots .edge {
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: #314056;
+}
+
+#robots .row.long .edge,
+#robots .qty.up {
+  color: #3ddc97;
+}
+
+#robots .row.long .edge {
+  background: #3ddc97;
+}
+
+#robots .row.short .edge {
+  background: #ff5c7a;
+}
+
+#robots .qty.down {
+  color: #ff5c7a;
+}
+
+#robots .tool {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#robots .qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #c5d0e0;
+  white-space: nowrap;
+}
+
+#robots .robot-text {
+  margin: 0 0 6px 11px;
+  color: #c5d0e0;
+  font-size: 12px;
+}
+
+#robots svg {
+  display: block;
+  flex: none;
 }
 
 .conflict-actions {
